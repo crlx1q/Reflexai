@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход в Reflex AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background: #181818; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .auth-box { background: #232323; border-radius: 10px; box-shadow: 0 8px 32px #0008; padding: 36px 28px; min-width: 320px; max-width: 95vw; }
+        .auth-box h2 { margin-bottom: 18px; }
+        .auth-box form { display: flex; flex-direction: column; gap: 12px; }
+        .auth-box input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #181818; color: #fff; }
+        .auth-box button { padding: 12px; background: #E58320; color: #fff; border: none; border-radius: 5px; font-weight: 600; cursor: pointer; }
+        .auth-box .switch-link { color: #E58320; cursor: pointer; text-decoration: underline; }
+        .auth-box .feedback { color: #f55; min-height: 18px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <h2 id="authTitle">Вход</h2>
+        <form id="authForm" autocomplete="off">
+            <input type="text" name="username" placeholder="Имя пользователя" required>
+            <input type="password" name="password" placeholder="Пароль" required>
+            <input type="text" name="displayName" placeholder="Отображаемое имя" style="display:none;">
+            <button type="submit">Войти</button>
+        </form>
+        <div class="feedback" id="authFeedback"></div>
+        <div style="font-size:13px;margin-top:10px;">
+            Нет аккаунта? <span class="switch-link" id="switchToRegister">Регистрация</span>
+        </div>
+    </div>
+    <script>
+        // --- auth.html логика ---
+        let isRegister = false;
+        const form = document.getElementById('authForm');
+        const feedback = document.getElementById('authFeedback');
+        const title = document.getElementById('authTitle');
+        const displayNameInput = form.querySelector('input[name="displayName"]');
+        const switchLink = document.getElementById('switchToRegister');
+
+        function setMode(register) {
+            isRegister = register;
+            if (register) {
+                title.textContent = 'Регистрация';
+                displayNameInput.style.display = '';
+                form.querySelector('button').textContent = 'Зарегистрироваться';
+                switchLink.textContent = 'Войти';
+                switchLink.previousSibling.textContent = 'Есть аккаунт? ';
+            } else {
+                title.textContent = 'Вход';
+                displayNameInput.style.display = 'none';
+                form.querySelector('button').textContent = 'Войти';
+                switchLink.textContent = 'Регистрация';
+                switchLink.previousSibling.textContent = 'Нет аккаунта? ';
+            }
+            feedback.textContent = '';
+        }
+
+        switchLink.onclick = () => setMode(!isRegister);
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            feedback.textContent = '';
+            const data = Object.fromEntries(new FormData(form).entries());
+            let url = isRegister ? '/api/register' : '/api/login';
+            try {
+                let resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                let res = await resp.json();
+                if (!resp.ok) {
+                    if (res.error && res.error.toLowerCase().includes('подтверждения')) {
+                        feedback.textContent = 'Ожидайте подтверждения регистрации...';
+                        form.querySelectorAll('input,button').forEach(el => el.disabled = true);
+                        // Периодически пробуем войти автоматически
+                        let interval = setInterval(async () => {
+                            let checkResp = await fetch('/api/login', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username: data.username, password: data.password })
+                            });
+                            let checkRes = await checkResp.json();
+                            if (checkResp.ok && checkRes.token) {
+                                clearInterval(interval);
+                                feedback.textContent = 'Аккаунт подтверждён, вход...';
+                                localStorage.setItem('authToken', checkRes.token);
+                                setTimeout(() => { window.location.href = 'index.html'; }, 800);
+                            }
+                        }, 5000);
+                        return;
+                    }
+                    throw new Error(res.error || 'Ошибка');
+                }
+                if (isRegister) {
+                    feedback.textContent = 'Ожидайте подтверждения регистрации...';
+                    form.querySelectorAll('input,button').forEach(el => el.disabled = true);
+                    let interval = setInterval(async () => {
+                        let checkResp = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: data.username, password: data.password })
+                        });
+                        let checkRes = await checkResp.json();
+                        if (checkResp.ok && checkRes.token) {
+                            clearInterval(interval);
+                            feedback.textContent = 'Аккаунт подтверждён, вход...';
+                            localStorage.setItem('authToken', checkRes.token);
+                            setTimeout(() => { window.location.href = 'index.html'; }, 800);
+                        }
+                    }, 5000);
+                    return;
+                }
+                // Успешный вход
+                localStorage.setItem('authToken', res.token);
+                window.location.href = 'index.html';
+            } catch (err) {
+                feedback.textContent = err.message || 'Ошибка';
+            }
+        };
+
+        // Если уже авторизован — редирект на главную
+        if (localStorage.getItem('authToken')) {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
