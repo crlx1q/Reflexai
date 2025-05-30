@@ -5,7 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 const app = express();
 const SECRET = 'supersecretkey';
-const PORT = 3000;
+const PORT = 8000;
 
 // --- Простая база (JSON) ---
 const DB_FILE = './db.json';
