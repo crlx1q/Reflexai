@@ -18,6 +18,10 @@
         .pending-list .info { flex: 1; }
         .pending-list button { margin-left: 10px; }
         .feedback { color: #f55; min-height: 18px; font-size: 13px; }
+        .user-list { margin: 0; padding: 0; list-style: none; }
+        .user-list li { background: #222; margin-bottom: 10px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .user-list .info { flex: 1; }
+        .user-list button { margin-left: 10px; }
     </style>
 </head>
 <body>
@@ -39,6 +43,11 @@
                 <button type="submit">Сохранить</button>
             </form>
             <div class="feedback" id="monitorUrlFeedback"></div>
+            <hr style="margin:20px 0;">
+            <h3>Пользователи (выдача Pro)</h3>
+            <ul class="user-list" id="userList"></ul>
+            <button id="refreshUsersBtn">Обновить пользователей</button>
+            <div class="feedback" id="userListFeedback"></div>
         </div>
     </div>
     <script>
@@ -56,6 +65,11 @@
         const monitorUrlForm = document.getElementById('monitorUrlForm');
         const monitorUrlInput = document.getElementById('monitorUrlInput');
         const monitorUrlFeedback = document.getElementById('monitorUrlFeedback');
+
+        // --- Управление пользователями ---
+        const userList = document.getElementById('userList');
+        const refreshUsersBtn = document.getElementById('refreshUsersBtn');
+        const userListFeedback = document.getElementById('userListFeedback');
 
         loginForm.onsubmit = (e) => {
             e.preventDefault();
@@ -143,11 +157,61 @@
             }
         };
 
-        // После входа админа — загрузить monitorUrl
+        // Загрузка пользователей для выдачи Pro
+        async function loadUsers() {
+            userList.innerHTML = '<li>Загрузка...</li>';
+            userListFeedback.textContent = '';
+            try {
+                // Получаем список пользователей через сервер (добавьте эндпоинт /api/admin/users)
+                const resp = await fetch('/api/admin/users');
+                if (!resp.ok) throw new Error('Ошибка доступа');
+                const data = await resp.json();
+                userList.innerHTML = '';
+                if (!data.length) {
+                    userList.innerHTML = '<li>Нет пользователей</li>';
+                    return;
+                }
+                for (const user of data) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName}) 
+                        <span style="color:${user.isPro ? '#3ee97c' : '#f55'};font-weight:600;margin-left:8px;">${user.isPro ? 'PRO' : 'FREE'}</span>
+                    </span>
+                    <button class="pro-btn" style="background:${user.isPro ? '#555' : '#3ee97c'};color:#fff;">
+                        ${user.isPro ? 'Снять Pro' : 'Выдать Pro'}
+                    </button>`;
+                    li.querySelector('.pro-btn').onclick = () => handleProAction(user.username, !user.isPro);
+                    userList.appendChild(li);
+                }
+            } catch (e) {
+                userList.innerHTML = '<li>Ошибка загрузки</li>';
+                userListFeedback.textContent = 'Ошибка загрузки пользователей';
+            }
+        }
+
+        async function handleProAction(username, setPro) {
+            userListFeedback.textContent = '';
+            try {
+                const resp = await fetch('/api/admin/setpro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, isPro: setPro })
+                });
+                if (!resp.ok) throw new Error('Ошибка');
+                await loadUsers();
+                userListFeedback.textContent = setPro ? 'Pro выдан!' : 'Pro снят!';
+            } catch {
+                userListFeedback.textContent = 'Ошибка запроса';
+            }
+        }
+
+        refreshUsersBtn.onclick = loadUsers;
+
+        // После входа админа — загрузить monitorUrl и пользователей
         function afterAdminLogin() {
             adminConsole.style.display = '';
             loadPending();
             loadMonitorUrl();
+            loadUsers();
         }
     </script>
 </body>
