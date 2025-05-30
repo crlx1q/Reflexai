@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const voiceInputBtn = document.getElementById('voiceInputBtn'); // Кнопка голосового ввода
 
     // URL для SVG иконки Reflex
-    const reflexSvgUrl = "https://cdn.glitch.global/209e13d7-5228-4d40-9601-0a225164a2fe/reflex.svg?v=1746970198201";
+    const reflexSvgUrl = "reflex.svg";
 
     const monthlyPrice = 10; // Месячная цена подписки
     const yearlyPrice = 100; // Годовая цена подписки
