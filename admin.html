@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>ReflexAI Admin Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body { background: #181818; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .admin-box { background: #232323; border-radius: 10px; box-shadow: 0 8px 32px #0008; padding: 36px 28px; min-width: 340px; max-width: 95vw; }
+        .admin-box h2 { margin-bottom: 18px; }
+        .admin-box form { display: flex; flex-direction: column; gap: 12px; }
+        .admin-box input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #181818; color: #fff; }
+        .admin-box button { padding: 12px; background: #E58320; color: #fff; border: none; border-radius: 5px; font-weight: 600; cursor: pointer; }
+        .admin-console { margin-top: 20px; }
+        .pending-list { margin: 0; padding: 0; list-style: none; }
+        .pending-list li { background: #222; margin-bottom: 10px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .pending-list .info { flex: 1; }
+        .pending-list button { margin-left: 10px; }
+        .feedback { color: #f55; min-height: 18px; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="admin-box">
+        <h2>Админ-консоль ReflexAI</h2>
+        <form id="adminLoginForm" autocomplete="off">
+            <input type="password" name="adminpass" placeholder="Пароль администратора" required>
+            <button type="submit">Войти</button>
+        </form>
+        <div class="feedback" id="adminFeedback"></div>
+        <div class="admin-console" id="adminConsole" style="display:none;">
+            <h3>Ожидающие регистрации</h3>
+            <ul class="pending-list" id="pendingList"></ul>
+            <button id="refreshBtn">Обновить</button>
+            <hr style="margin:20px 0;">
+            <h3>Настройки мониторинга</h3>
+            <form id="monitorUrlForm" style="display:flex;gap:8px;align-items:center;">
+                <input type="text" id="monitorUrlInput" placeholder="https://...tunnelmole.net/data" style="flex:1;">
+                <button type="submit">Сохранить</button>
+            </form>
+            <div class="feedback" id="monitorUrlFeedback"></div>
+        </div>
+    </div>
+    <script>
+        // --- Простой пароль ---
+        const ADMIN_PASSWORD = "65195";
+        const loginForm = document.getElementById('adminLoginForm');
+        const feedback = document.getElementById('adminFeedback');
+        const adminConsole = document.getElementById('adminConsole');
+        const pendingList = document.getElementById('pendingList');
+        const refreshBtn = document.getElementById('refreshBtn');
+
+        let adminAuthed = false;
+
+        // --- Monitor URL управление ---
+        const monitorUrlForm = document.getElementById('monitorUrlForm');
+        const monitorUrlInput = document.getElementById('monitorUrlInput');
+        const monitorUrlFeedback = document.getElementById('monitorUrlFeedback');
+
+        loginForm.onsubmit = (e) => {
+            e.preventDefault();
+            const pass = loginForm.adminpass.value;
+            if (pass === ADMIN_PASSWORD) {
+                adminAuthed = true;
+                loginForm.style.display = 'none';
+                feedback.textContent = '';
+                afterAdminLogin();
+            } else {
+                feedback.textContent = 'Неверный пароль';
+            }
+        };
+
+        async function loadPending() {
+            pendingList.innerHTML = '<li>Загрузка...</li>';
+            try {
+                // Получаем список ожидающих через сервер (добавьте эндпоинт /api/admin/pending)
+                const resp = await fetch('/api/admin/pending');
+                if (!resp.ok) throw new Error('Ошибка доступа');
+                const data = await resp.json();
+                pendingList.innerHTML = '';
+                if (!data.length) {
+                    pendingList.innerHTML = '<li>Нет ожидающих регистраций</li>';
+                    return;
+                }
+                for (const user of data) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName})</span>
+                        <button class="accept-btn">Принять</button>
+                        <button class="reject-btn">Отклонить</button>`;
+                    li.querySelector('.accept-btn').onclick = () => handleAction(user.username, true);
+                    li.querySelector('.reject-btn').onclick = () => handleAction(user.username, false);
+                    pendingList.appendChild(li);
+                }
+            } catch (e) {
+                pendingList.innerHTML = '<li>Ошибка загрузки</li>';
+            }
+        }
+
+        async function handleAction(username, accept) {
+            try {
+                const resp = await fetch('/api/admin/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, accept })
+                });
+                if (!resp.ok) throw new Error('Ошибка');
+                loadPending();
+            } catch {
+                alert('Ошибка запроса');
+            }
+        }
+
+        refreshBtn.onclick = loadPending;
+
+        async function loadMonitorUrl() {
+            try {
+                const resp = await fetch('/api/monitor-url');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    monitorUrlInput.value = data.monitorUrl || '';
+                }
+            } catch {}
+        }
+
+        monitorUrlForm.onsubmit = async (e) => {
+            e.preventDefault();
+            monitorUrlFeedback.textContent = '';
+            const url = monitorUrlInput.value.trim();
+            if (!url) {
+                monitorUrlFeedback.textContent = 'Введите ссылку';
+                return;
+            }
+            try {
+                const resp = await fetch('/api/monitor-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ monitorUrl: url, adminSecret: "65195" })
+                });
+                if (!resp.ok) throw new Error('Ошибка сохранения');
+                monitorUrlFeedback.textContent = 'Ссылка сохранена!';
+            } catch {
+                monitorUrlFeedback.textContent = 'Ошибка сохранения';
+            }
+        };
+
+        // После входа админа — загрузить monitorUrl
+        function afterAdminLogin() {
+            adminConsole.style.display = '';
+            loadPending();
+            loadMonitorUrl();
+        }
+    </script>
+</body>
+</html>

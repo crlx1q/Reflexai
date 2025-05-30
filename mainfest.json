@@ -1,0 +1,26 @@
+{
+  "name": "Reflex AI",
+  "short_name": "ReflexAI",
+  "description": "Reflex AI — персональный помощник.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": [
+    {
+      "src": "https://cdn.glitch.global/209e13d7-5228-4d40-9601-0a225164a2fe/reflex.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "https://via.placeholder.com/192.png/121212/FFFFFF?text=R",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512.png/121212/FFFFFF?text=R",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reflex AI</title>
+    <link rel="icon" href="https://cdn.glitch.global/209e13d7-5228-4d40-9601-0a225164a2fe/reflex.svg?v=1746970198201" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Highlight.js dark theme (atom-one-dark) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <!-- Highlight.js core JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body class="dark-theme">
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-logo">
+            <img src="https://cdn.glitch.global/209e13d7-5228-4d40-9601-0a225164a2fe/reflex.svg?v=1746970198201" alt="Логотип Reflex AI" width="80" height="80">
+        </div>
+    </div>
+
+    <div class="app-container" style="display: none;">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Поиск...">
+                </div>
+                <button class="btn-icon btn-new-chat" aria-label="Новый чат">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="btn-icon btn-close-sidebar" aria-label="Закрыть боковую панель">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-section="chat">
+                    <i class="fas fa-comments"></i>
+                    <span>Чат</span>
+                </a>
+                <a href="#" class="nav-item" data-section="characters">
+                    <i class="fas fa-user-friends"></i>
+                    <span>Персонажи</span>
+                </a>
+                <a href="#" class="nav-item" data-section="api">
+                    <i class="fas fa-code"></i>
+                    <span>API</span>
+                </a>
+                <a href="#" class="nav-item" data-section="vvv-token">
+                    <i class="fas fa-coins"></i>
+                    <span>VVV Токен</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-section folders-section">
+                <div class="section-header">
+                    <span>ПАПКИ</span>
+                    <button class="btn-icon" aria-label="Добавить папку"><i class="fas fa-plus"></i></button>
+                </div>
+                <ul class="folders-list">
+                    <li>
+                        <i class="fas fa-folder"></i>
+                        <span>Жесть</span>
+                        <div class="folder-actions">
+                            <button class="btn-icon" aria-label="Редактировать"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn-icon" aria-label="Удалить"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="sidebar-section chats-section">
+                <div class="section-header">
+                    <span>ЧАТЫ</span>
+                    <button class="btn-icon" aria-label="Еще"><i class="fas fa-ellipsis-h"></i></button>
+                </div>
+                <ul class="chats-list">
+                    <!-- Чаты будут динамически добавляться через JS -->
+                </ul>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <img src="https://placehold.co/40x40/7B447C/FFFFFF?text=A" alt="Аватар пользователя" class="user-avatar">
+                    <div class="user-info">
+                        <span class="user-name">Алиса Пользователь</span>
+                        <span class="user-points">111 Очков</span>
+                    </div>
+                    <button class="btn-icon btn-logout" title="Выйти" style="display:none;"><i class="fas fa-sign-out-alt"></i></button>
+                    <!-- Кнопка выхода будет показана через JS -->
+                </div>
+            </div>
+            <div id="profileMenuDropdown" class="profile-menu-dropdown"></div>
+        </aside>
+
+        <div class="main-content-wrapper">
+            <div class="sidebar-overlay"></div>
+            <main class="main-content">
+                <header class="main-header">
+                    <div class="header-left">
+                        <button class="btn-icon btn-toggle-sidebar" aria-label="Переключить боковую панель">
+                            <i class="fas fa-bars-staggered"></i>
+                        </button>
+                        <div class="dropdown">
+                            <button class="dropdown-toggle">
+                                <span class="gradient-pro-title">Reflex AI Pro</span> <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                        <!-- Мини-монитор температуры и батареи -->
+                        <div class="mini-monitor">
+                            <div class="mini-indicator" id="miniTempIndicator">
+                                <span class="mini-icon" id="miniTempIcon"></span>
+                                <span class="mini-value" id="miniTempValue">--°C</span>
+                                <div class="mini-bar-bg">
+                                    <div class="mini-bar" id="miniTempBar"></div>
+                                </div>
+                            </div>
+                            <div class="mini-indicator" id="miniBatteryIndicator">
+                                <span class="mini-icon" id="miniBatteryIcon"></span>
+                                <span class="mini-value" id="miniBatteryValue">--%</span>
+                                <div class="mini-bar-bg">
+                                    <div class="mini-bar" id="miniBatteryBar"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- /Мини-монитор -->
+                    </div>
+                    <div class="header-right">
+                        <button class="btn btn-header btn-new-chat-header" aria-label="Новый чат">
+                            <i class="fas fa-comment-dots"></i><span class="btn-text-desktop">New chat</span>
+                        </button>
+                        <button class="btn btn-header btn-settings-header" aria-label="Настройки">
+                            <i class="fas fa-sliders-h"></i><span class="btn-text-desktop">Settings</span>
+                        </button>
+                    </div>
+                </header>
+                
+                <div class="mobile-header-info">
+                    <span>Модель: <span class="model-name">Reflex AI</span></span>
+                </div>
+
+                <div class="chat-area">
+                    <div class="chat-messages" id="chatMessages">
+                    </div>
+                    <!-- Контейнер для анимации загрузки ИИ (будет показан через JS) -->
+                    <div id="aiTypingIndicator" class="ai-typing-indicator" style="display: none;">
+                        <img src="https://cdn.glitch.global/209e13d7-5228-4d40-9601-0a225164a2fe/reflex.svg?v=1746970198201" alt="Reflex AI" class="ai-typing-avatar">
+                        <span class="ai-typing-dots">
+                            <span></span><span></span><span></span>
+                        </span>
+                    </div>
+                </div>
+
+                <footer class="chat-input-area">
+                    <div class="input-wrapper">
+                        <div class="input-main-line">
+                            <button class="btn-icon btn-attach" aria-label="Прикрепить файл">
+                                <i class="fas fa-paperclip"></i>
+                            </button>
+                            <textarea id="messageInput" placeholder="Задайте вопрос конфиденциально..."></textarea>
+                            <!-- Добавляем меню команд здесь -->
+                            <div id="commandSuggestions" class="command-suggestions" style="display: none;">
+                                <div class="command-header">Доступные команды:</div>
+                                <div class="commands-list">
+                                    <div class="command-item" data-cmd="заряд батареи">
+                                        <i class="fas fa-battery-three-quarters"></i>
+                                        <span>заряд батареи</span>
+                                        <small>Показать уровень заряда устройства</small>
+                                    </div>
+                                    <div class="command-item" data-cmd="время работы">
+                                        <i class="fas fa-clock"></i>
+                                        <span>время работы</span>
+                                        <small>Время работы сервера с ngrok</small>
+                                    </div>
+                                    <div class="command-item" data-cmd="температура">
+                                        <i class="fas fa-thermometer-half"></i>
+                                        <span>температура</span>
+                                        <small>Температура CPU устройства</small>
+                                    </div>
+                                    <div class="command-item" data-cmd="помощь">
+                                        <i class="fas fa-question-circle"></i>
+                                        <span>помощь</span>
+                                        <small>Список всех доступных команд</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-icon btn-voice-input" id="voiceInputBtn" aria-label="Голосовой ввод">
+                                <!-- Заменено: <i class="fas fa-microphone-lines"></i> -->
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg" class="icon-md">
+                                    <path d="M5.66699 14.4165V3.5835C5.66699 2.89314 6.22664 2.3335 6.91699 2.3335C7.6072 2.33367 8.16699 2.89325 8.16699 3.5835V14.4165C8.16699 15.1068 7.6072 15.6663 6.91699 15.6665C6.22664 15.6665 5.66699 15.1069 5.66699 14.4165ZM9.83301 11.9165V6.0835C9.83301 5.39325 10.3928 4.83367 11.083 4.8335C11.7734 4.8335 12.333 5.39314 12.333 6.0835V11.9165C12.333 12.6069 11.7734 13.1665 11.083 13.1665C10.3928 13.1663 9.83301 12.6068 9.83301 11.9165ZM1.5 10.2505V7.75049C1.5 7.06013 2.05964 6.50049 2.75 6.50049C3.44036 6.50049 4 7.06013 4 7.75049V10.2505C3.99982 10.9407 3.44025 11.5005 2.75 11.5005C2.05975 11.5005 1.50018 10.9407 1.5 10.2505ZM14 10.2505V7.75049C14 7.06013 14.5596 6.50049 15.25 6.50049C15.9404 6.50049 16.5 7.06013 16.5 7.75049V10.2505C16.4998 10.9407 15.9402 11.5005 15.25 11.5005C14.5598 11.5005 14.0002 10.9407 14 10.2505Z" fill="currentColor"></path>
+                                </svg>
+                            </button>
+                            <button class="btn-send" id="sendButton" aria-label="Отправить">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                        </div>
+                        <div class="input-secondary-line">
+                            <div class="input-actions">
+                                <button class="btn-icon action-btn" id="chatActionBtn" aria-label="Чат"><i class="fas fa-comment-dots"></i></button>
+                                <button class="btn-icon action-btn" id="imageActionBtn" aria-label="Изображение"><i class="fas fa-image"></i></button>
+                                <button class="btn-icon action-btn" id="codeActionBtn" aria-label="Код"><i class="fas fa-code"></i></button>
+                                <button class="btn-icon action-btn" id="webSearchBtn" aria-label="Веб"><i class="fas fa-globe"></i></button>
+                            </div>
+                            <div class="pro-features">
+                                <a href="#" class="upgrade-to-pro-link"><span class="pro-link-text">Улучшить до Pro</span></a>
+                            </div>
+                            <div class="message-limits"></div>
+                        </div>
+                    </div>
+                </footer>
+            </main>
+        </div>
+
+        <div class="settings-panel">
+            <div class="settings-header">
+                <h2>Настройки</h2>
+                <button class="btn-icon btn-close-settings" aria-label="Закрыть настройки">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-tabs">
+                <button class="tab-link active" data-tab="text-settings">Текст</button>
+                <button class="tab-link" data-tab="image-settings">Изображение</button>
+                <button class="tab-link" data-tab="code-settings">Код</button>
+                <button class="tab-link" data-tab="app-settings">Приложение</button>
+            </div>
+            <div class="settings-content">
+                <div id="text-settings" class="tab-content active">
+                    <div class="setting-item">
+                        <label for="model-select">Модель</label>
+                        <select id="model-select">
+                            <option value="reflex-ai" class="model-name">Reflex AI Pro</option>
+                        </select>
+                    </div>
+                    <div class="setting-item toggle-item">
+                        <label for="web-enabled">Веб включен</label>
+                        <label class="switch">
+                            <input type="checkbox" id="web-enabled" checked>
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <label>Системный промпт</label>
+                        <button class="btn btn-outline btn-add-prompt"><i class="fas fa-plus"></i> Добавить</button>
+                        <p class="description">Управляйте реальностью ИИ. Создайте системный промпт, чтобы указать, как должен вести себя ИИ.</p>
+                    </div>
+                    <div class="setting-item">
+                        <label>Reflex AI Voice <span class="badge-new">Новое</span></label>
+                        <p class="description">Доступно для Pro пользователей. Включите голосовое сопровождение ответов ИИ в реальном времени.</p>
+                    </div>
+                    <div class="setting-item advanced-settings-toggle">
+                        <label>Расширенные настройки</label>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="advanced-settings-content" style="display: none;">
+                        <div class="advanced-setting-row">
+                            <span class="advanced-setting-label">
+                                Отключить системную подсказку Reflex
+                                <i class="fas fa-info-circle" title="Отключает автоматическую подсказку для Reflex AI"></i>
+                            </span>
+                            <label class="switch advanced-setting-switch">
+                                <input type="checkbox" id="disable-system-reflex">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="advanced-setting-slider-row">
+                            <span class="advanced-setting-slider-label">
+                                Температура
+                                <i class="fas fa-info-circle" title="Контролирует креативность генерации."></i>
+                            </span>
+                            <input type="range" min="0" max="1" step="0.01" value="0.3" class="advanced-setting-slider" id="temperature">
+                            <span class="advanced-setting-slider-value" id="temperatureValue">0.3</span>
+                        </div>
+                        <div class="advanced-setting-slider-row">
+                            <span class="advanced-setting-slider-label">
+                                Верхний P
+                                <i class="fas fa-info-circle" title="Ограничивает вероятность выбора токенов."></i>
+                            </span>
+                            <input type="range" min="0" max="1" step="0.01" value="1" class="advanced-setting-slider" id="topP">
+                            <span class="advanced-setting-slider-value" id="topPValue">1</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-reset-defaults">Сбросить по умолчанию</button>
+                </div>
+                <div id="image-settings" class="tab-content"><p>Настройки изображений.</p></div>
+                <div id="code-settings" class="tab-content"><p>Настройки кода.</p></div>
+                <div id="app-settings" class="tab-content">
+                    <div class="setting-item">
+                        <label>Модель</label>
+                        <select id="model-select">
+                            <option value="reflex-ai" class="model-name">Reflex AI Pro</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>Версия</label>
+                        <span>20250509.204911</span>
+                    </div>
+                    <div class="setting-item toggle-item">
+                        <label for="enter-submits">Enter отправляет сообщение <i class="fas fa-info-circle" title="Если включено, нажатие Enter отправит сообщение. Shift+Enter для новой строки."></i></label>
+                        <label class="switch"><input type="checkbox" id="enter-submits" checked><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-item toggle-item">
+                        <label for="input-history">Навигация по истории ввода <i class="fas fa-info-circle" title="Используйте стрелки вверх/вниз для навигации по ранее введенным сообщениям."></i></label>
+                        <label class="switch"><input type="checkbox" id="input-history" checked><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-item toggle-item">
+                        <label for="external-link-warning">Предупреждение о внешних ссылках <i class="fas fa-info-circle" title="Показывать предупреждение перед переходом по внешним ссылкам."></i></label>
+                        <label class="switch"><input type="checkbox" id="external-link-warning" checked><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-item toggle-item">
+                        <label for="disable-telemetry">Отключить сбор телеметрии <i class="fas fa-info-circle" title="Отключает отправку анонимных данных об использовании для улучшения приложения."></i></label>
+                        <label class="switch"><input type="checkbox" id="disable-telemetry"><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-item">
+                        <label for="color-scheme">Цветовая схема</label>
+                        <select id="color-scheme">
+                            <option value="dark">Темная</option><option value="light">Светлая</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <label>Цвет темы</label>
+                        <div class="theme-color-picker">
+                            <button class="color-option" data-color="default" style="background-color: #E55C20;" aria-label="Стандартный цвет темы"></button>
+                            <button class="color-option" data-color="blue" style="background-color: #2072E5;" aria-label="Синий цвет темы"></button>
+                            <button class="color-option" data-color="pink" style="background-color: #E5207F;" aria-label="Розовый цвет темы"></button>
+                            <button class="color-option" data-color="purple" style="background-color: #7820E5;" aria-label="Фиолетовый цвет темы"></button>
+                            <button class="color-option active" data-color="orange" style="background-color: #E58320;" aria-label="Оранжевый цвет темы"></button>
+                            <button class="color-option" data-color="violet" style="background-color: #A020E5;" aria-label="Сиреневый цвет темы"></button>
+                            <button class="color-option" data-color="green" style="background-color: #20E562;" aria-label="Зеленый цвет темы"></button>
+                            <button class="color-option" data-color="grey" style="background-color: #808080;" aria-label="Серый цвет темы"></button>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label for="language-select">Язык</label>
+                        <select id="language-select"><option value="gb">Английский (GB)</option><option value="ru" selected>Русский (RU)</option></select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="subscriptionModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Улучшить до Reflex AI Pro</h3>
+                <button id="closeSubscriptionModal" class="btn-icon btn-close-modal" aria-label="Закрыть">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="subscription-toggle">
+                    <button class="sub-toggle-btn active" data-period="monthly">Ежемесячно</button>
+                    <button class="sub-toggle-btn" data-period="yearly">Ежегодно <span class="save-badge">Экономия 20%</span></button>
+                </div>
+                <div class="price-display">
+                    <span id="subscriptionPrice">$18</span><span id="subscriptionPeriod">/месяц</span>
+                </div>
+                <ul class="features-list">
+                    <li><i class="fas fa-check-circle"></i> 150 сообщений в день (вместо 5)</li>
+                    <li><i class="fas fa-check-circle"></i> Приоритетные сообщения — отправляются даже при высокой нагрузке сервера</li>
+                    <li><i class="fas fa-check-circle"></i> Приватный режим</li>
+                    <li><i class="fas fa-check-circle"></i> Создание и обмен персонажами</li>
+                    <li><i class="fas fa-check-circle"></i> Доступ к API (ограниченный, тариф Explorer)</li>
+                    <li><i class="fas fa-check-circle"></i> Безопасное резервное копирование истории</li>
+                    <li><i class="fas fa-check-circle"></i> Доступ к новейшим и самым интеллектуальным моделям</li>
+                    <li><i class="fas fa-check-circle"></i> Отключение безопасного режима Reflex AI</li>
+                </ul>
+                <button class="btn btn-subscribe">Подписаться</button>
+                <p class="subscription-terms">*Подробнее о приватности в нашей политике.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>
