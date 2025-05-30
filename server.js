@@ -5,7 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 const app = express();
 const SECRET = 'supersecretkey';
-const PORT = 8000;
+const PORT = 3000;
 
 // --- Простая база (JSON) ---
 const DB_FILE = './db.json';
@@ -341,6 +341,16 @@ app.get('/api/admin/pending', (req, res) => {
     res.json(db.pending.map(u => ({
         username: u.username,
         displayName: u.displayName
+    })));
+});
+
+// Новый эндпоинт: список всех пользователей для выдачи Pro
+app.get('/api/admin/users', (req, res) => {
+    // (Можно добавить простую защиту по IP или секрету, если нужно)
+    res.json(db.users.map(u => ({
+        username: u.username,
+        displayName: u.displayName,
+        isPro: !!u.isPro
     })));
 });
 
