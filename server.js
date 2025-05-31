@@ -11,19 +11,23 @@ const SECRET = 'supersecretkey'; // Секрет для JWT токенов по�
 const PORT = process.env.PORT || 8000; // Koyeb установит PORT автоматически
 
 // Пароль администратора теперь берется из переменной окружения
-// Убедись, что в Koyeb установлена переменная окружения ADMIN_PASSKEY
 const ADMIN_PASSKEY = process.env.ADMIN_PASSKEY;
 
-if (!ADMIN_PASSKEY) {
+// --- ДИАГНОСТИЧЕСКИЙ ЛОГ ---
+if (ADMIN_PASSKEY) {
+    console.log("INFO: Переменная окружения ADMIN_PASSKEY успешно загружена.");
+    // В реальном продакшене не стоит логировать сам пароль, но для отладки можно:
+    // console.log(`INFO: ADMIN_PASSKEY имеет длину: ${ADMIN_PASSKEY.length}`); // Безопаснее, чем логировать сам пароль
+} else {
+    console.error("CRITICAL_STARTUP_ERROR: Переменная окружения ADMIN_PASSKEY НЕ найдена!");
     console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     console.warn("!!! ПРЕДУПРЕЖДЕНИЕ: Секрет администратора ADMIN_PASSKEY не установлен !!!");
     console.warn("!!! Админ-панель может быть не полностью защищена.             !!!");
     console.warn("!!! Установите переменную окружения ADMIN_PASSKEY в Koyeb.    !!!");
+    console.warn("!!! И ОБЯЗАТЕЛЬНО ПЕРЕДЕПЛОЙТЕ/ПЕРЕЗАПУСТИТЕ СЕРВИС!         !!!");
     console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    // Можно установить пароль по умолчанию для локальной разработки,
-    // но для продакшена он ДОЛЖЕН быть из переменных окружения.
-    // ADMIN_PASSKEY = "your_local_fallback_password_if_needed";
 }
+// --- КОНЕЦ ДИАГНОСТИЧЕСКОГО ЛОГА ---
 
 
 const LLAMA_SERVER_URL = process.env.LLAMA_SERVER_URL || 'https://excited-lark-witty.ngrok-free.app';
@@ -122,13 +126,15 @@ function adminAuth(req, res, next) {
     const providedPassword = req.headers['x-admin-secret'] || req.body.adminSecret;
 
     if (!ADMIN_PASSKEY) {
-        console.error("Критическая ошибка: ADMIN_PASSKEY не настроен на сервере.");
-        return res.status(500).json({ error: 'Ошибка конфигурации сервера: пароль администратора не установлен.' });
+        // Эта ошибка теперь должна быть поймана при старте, но на всякий случай
+        console.error("CRITICAL_RUNTIME_ERROR: ADMIN_PASSKEY не определен в adminAuth. Это не должно происходить, если сервер стартовал корректно.");
+        return res.status(500).json({ error: 'Критическая ошибка конфигурации сервера: пароль администратора не установлен.' });
     }
 
     if (providedPassword && providedPassword === ADMIN_PASSKEY) {
         next();
     } else {
+        console.warn(`AUTH_FAIL: Попытка доступа к админ-ресурсу с неверным или отсутствующим adminSecret. IP: ${req.ip}`);
         res.status(403).json({ error: 'Нет доступа (неверный adminSecret)' });
     }
 }
@@ -408,15 +414,12 @@ app.put('/api/me', auth, (req, res) => {
 });
 
 // --- Admin Endpoints ---
-// Все админские эндпоинты теперь защищены adminAuth middleware
-
 app.post('/api/admin/login-check', (req, res) => {
-    // Этот эндпоинт просто проверяет пароль и не создает сессию.
-    // Клиент использует его для разблокировки UI.
     const { adminPassword } = req.body;
     if (!ADMIN_PASSKEY) {
-         console.error("Критическая ошибка: ADMIN_PASSKEY не настроен на сервере при проверке логина.");
-        return res.status(500).json({ error: 'Ошибка конфигурации сервера.' });
+        // Эта ошибка теперь должна быть видна в логах сервера при старте, если ADMIN_PASSKEY не установлен
+        console.error("LOGIN_CHECK_ERROR: ADMIN_PASSKEY не настроен на сервере при проверке логина.");
+        return res.status(500).json({ error: 'Ошибка конфигурации сервера: ADMIN_PASSKEY не установлен.' });
     }
     if (adminPassword && adminPassword === ADMIN_PASSKEY) {
         res.json({ ok: true, message: 'Пароль верный' });
@@ -426,7 +429,7 @@ app.post('/api/admin/login-check', (req, res) => {
 });
 
 
-app.post('/api/admin/setpro', adminAuth, (req, res) => { // Защищено adminAuth
+app.post('/api/admin/setpro', adminAuth, (req, res) => {
     const { username, isPro } = req.body;
     const user = db.users.find(u => u.username === username);
     if (!user) return res.status(404).json({ error: 'Нет пользователя' });
@@ -435,28 +438,25 @@ app.post('/api/admin/setpro', adminAuth, (req, res) => { // Защищено adm
     res.json({ ok: true, message: `Статус Pro для ${username} обновлен.` });
 });
 
-app.get('/api/admin/pending', adminAuth, (req, res) => { // Защищено adminAuth
+app.get('/api/admin/pending', adminAuth, (req, res) => {
     res.json(db.pending.map(u => ({ username: u.username, displayName: u.displayName })));
 });
 
-app.get('/api/admin/users', adminAuth, (req, res) => { // Защищено adminAuth
+app.get('/api/admin/users', adminAuth, (req, res) => {
     res.json(db.users.map(u => ({ username: u.username, displayName: u.displayName, isPro: !!u.isPro })));
 });
 
-app.post('/api/admin/approve', adminAuth, (req, res) => { // Защищено adminAuth
-    const { username, accept } = req.body; // adminSecret уже проверен в adminAuth
+app.post('/api/admin/approve', adminAuth, (req, res) => {
+    const { username, accept } = req.body;
     const idx = db.pending.findIndex(u => u.username === username);
     if (idx === -1) return res.status(404).json({ error: 'Нет такого пользователя в ожидании' });
     const userToProcess = db.pending[idx];
     db.pending.splice(idx, 1);
     if (accept) {
         db.users.push({ username: userToProcess.username, password: userToProcess.password, displayName: userToProcess.displayName, isPro: false });
-        saveDb();
-        return res.json({ ok: true, message: 'Пользователь подтвержден' });
-    } else {
-        saveDb(); // Сохраняем, даже если отклонили, т.к. удалили из pending
-        return res.json({ ok: true, message: 'Пользователь отклонен' });
     }
+    saveDb(); // Сохраняем в любом случае (удаление из pending или добавление в users)
+    res.json({ ok: true, message: `Пользователь ${userToProcess.username} ${accept ? 'подтвержден' : 'отклонен'}` });
 });
 
 
@@ -480,14 +480,8 @@ app.post('/api/chat/stream', auth, async (req, res) => {
             const { done, value } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-            // SSE формат: data: <json-string>\n\n
-            // LLaMA может отправлять несколько JSON объектов в одном чанке, разделенных \n\n
-            // или просто текст. Если это JSON stream, он должен быть data: {...}\n\ndata: {...}
-            // Для простоты предполагаем, что каждый чанк от LLaMA это просто текстовая дельта.
-            // Оборачиваем каждый чанк в SSE data:
             const sseFormattedChunk = chunk.split('\n\n').filter(Boolean).map(part => `data: ${part}\n\n`).join('');
             res.write(sseFormattedChunk);
-
         }
         res.write('event: done\ndata: {"id":"cmpl-done","object":"chat.completion.chunk","created":0,"model":"","choices":[{"index":0,"delta":{"role":"assistant","content":"[DONE]"},"finish_reason":"stop"}]}\n\n');
     } catch (error) {
@@ -510,10 +504,10 @@ function saveConfig() {
     catch (e) { console.error('Ошибка при сохранении config.json:', e); }
 }
 
-app.get('/api/monitor-url', adminAuth, (req, res) => res.json({ monitorUrl: config.monitorUrl })); // Защищено adminAuth
+app.get('/api/monitor-url', adminAuth, (req, res) => res.json({ monitorUrl: config.monitorUrl }));
 
-app.post('/api/monitor-url', adminAuth, (req, res) => { // Защищено adminAuth
-    const { monitorUrl } = req.body; // adminSecret уже проверен в adminAuth
+app.post('/api/monitor-url', adminAuth, (req, res) => {
+    const { monitorUrl } = req.body;
     if (!monitorUrl || typeof monitorUrl !== 'string') return res.status(400).json({ error: 'Некорректная ссылка' });
     config.monitorUrl = monitorUrl;
     saveConfig();
@@ -534,9 +528,7 @@ app.post('/api/message-limits/decrement', auth, (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`ReflexAI сервер запущен на порту ${PORT}`);
-    if (!ADMIN_PASSKEY) {
-        console.log("!!! ВАЖНО: Переменная окружения ADMIN_PASSKEY не установлена. Используйте ее для защиты админ-панели в продакшене. !!!");
-    }
+    // Проверка ADMIN_PASSKEY при старте уже сделана выше
 });
 
 function isSpecialCommandReply(text) {
