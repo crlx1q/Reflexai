@@ -3,15 +3,14 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const cors = require('cors');
+// Динамический импорт node-fetch, как вы и сделали
 const fetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
-require('dotenv').config(); // Add dotenv to load environment variables
 
 const app = express();
-const SECRET = process.env.JWT_SECRET || 'supersecretkey'; // Use env for JWT secret
-const ADMIN_SECRET = process.env.ADMIN_SECRET; // Use env for admin secret
-const PORT = process.env.PORT || 8000;
+const SECRET = 'supersecretkey';
+const PORT = 8000;
 
-const LLAMA_SERVER_URL = process.env.LLAMA_SERVER_URL || 'https://excited-lark-witty.ngrok-free.app';
+const LLAMA_SERVER_URL = 'https://excited-lark-witty.ngrok-free.app';
 
 const DB_FILE = './db.json';
 const defaultDb = {
@@ -38,6 +37,7 @@ try {
 function saveDb() {
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+        // console.log('[DB Save] База данных успешно сохранена.'); // Лог для подтверждения сохранения
     } catch (error) {
         console.error('Ошибка при сохранении базы данных:', error);
     }
@@ -102,32 +102,6 @@ function auth(req, res, next) {
     }
 }
 
-// New endpoint for admin login
-app.post('/api/admin/login', (req, res) => {
-    const { adminSecret } = req.body;
-    if (!adminSecret || adminSecret !== ADMIN_SECRET) {
-        return res.status(403).json({ error: 'Неверный админ-пароль' });
-    }
-    const token = jwt.sign({ role: 'admin' }, SECRET, { expiresIn: '1h' });
-    res.json({ token });
-});
-
-// Modified admin endpoints to require admin token
-function adminAuth(req, res, next) {
-    let token = null;
-    if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
-        token = req.headers.authorization.split(' ')[1];
-    }
-    if (!token) return res.status(401).json({ error: 'Нет токена' });
-    try {
-        const decoded = jwt.verify(token, SECRET);
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Требуется админ-доступ' });
-        next();
-    } catch {
-        res.status(401).json({ error: 'Неверный токен' });
-    }
-}
-
 app.post('/api/register', (req, res) => {
     const { username, password, displayName } = req.body;
     if (!username || !password || !displayName) return res.status(400).json({ error: 'Все поля обязательны' });
@@ -183,16 +157,21 @@ app.put('/api/chats/:id', auth, (req, res) => {
     const user = db.users.find(u => u.username === req.user.username);
     const oldMessages = chat.messages || [];
     const newMessages = req.body.messages || [];
+    // --- Лимит применяется только если добавлено новое сообщение от ИИ ---
+    // Считаем количество сообщений от ИИ до и после
     const oldAiCount = oldMessages.filter(m => m.sender === 'ai').length;
     const newAiCount = newMessages.filter(m => m.sender === 'ai').length;
     const aiDelta = newAiCount - oldAiCount;
 
+    // Найти новые AI сообщения
     let newAiMessages = [];
     if (aiDelta > 0) {
+        // Получаем только новые AI сообщения
         newAiMessages = newMessages.slice(-aiDelta);
     }
 
     const limits = checkMessageLimits(req.user.username, user.isPro);
+    // Проверяем, есть ли среди новых AI сообщений такие, которые НЕ являются спец-командой
     const shouldDecrement = newAiMessages.some(m => !isSpecialCommandReply(m.text));
     if (aiDelta > 0 && shouldDecrement && !limits.canSend) {
         return res.status(429).json({ error: `Достигнут лимит сообщений (${limits.limit})`, resetTime: limits.resetTime, limit: limits.limit, remaining: limits.remaining });
@@ -201,6 +180,7 @@ app.put('/api/chats/:id', auth, (req, res) => {
     chat.messages = newMessages;
     chat.lastUpdated = Date.now();
     db.chats[chatIndex] = chat;
+    // Уменьшаем лимит только если реально добавили новое AI сообщение, которое не является спец-командой
     if (aiDelta > 0 && shouldDecrement) {
         incrementMessageCount(req.user.username);
     }
@@ -225,6 +205,7 @@ app.delete('/api/chats/:id', auth, (req, res) => {
     }
 });
 
+// --- SSE: подписчики для фоновых событий ---
 const backgroundEventClients = [];
 
 app.get('/api/background-events', auth, (req, res) => {
@@ -241,19 +222,24 @@ app.get('/api/background-events', auth, (req, res) => {
     });
 });
 
+// --- ЭНДПОИНТ для фоновой обработки запроса ИИ ---
 app.post('/api/chat/background-request', auth, async (req, res) => {
     const { chatId: originalChatId, userMessage, chatHistory, temperature, topP, disableSystemReflex, systemMessageContent } = req.body;
     const { username } = req.user;
 
+    // Преобразуем chatId в число сразу и проверяем
     const numericChatId = parseInt(originalChatId, 10);
     if (isNaN(numericChatId)) {
         console.error(`[Background AI] Invalid chatId received: ${originalChatId}. Must be a number or convertible to one. User: ${username}`);
+        // Не отправляем 202, если chatId некорректен для фоновой задачи
         return res.status(400).json({ message: "Invalid chatId for background request." });
     }
 
+    // 1. Немедленно отвечаем клиенту, что запрос принят
     console.log(`[Background AI] Received request for chat ${numericChatId}, user ${username}. Sending 202 Accepted.`);
     res.status(202).json({ message: "Запрос принят в обработку." });
 
+    // 2. Выполняем остальную логику асинхронно
     (async () => {
         console.log(`[Background AI] Task started for user ${username}, chat ${numericChatId}. Message: "${userMessage.substring(0, 50)}..."`);
         try {
@@ -274,7 +260,7 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
                     });
                     chatToUpdate.lastUpdated = Date.now();
                     saveDb();
-                    console.log(`[Background AI] System message about limit saved to chat ${numericChatId}.`);
+                     console.log(`[Background AI] System message about limit saved to chat ${numericChatId}.`);
                 }
                 return;
             }
@@ -327,12 +313,14 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
                 console.log(`[Background AI] Found chat for ID ${numericChatId} at index ${chatIndex}. Current messages count: ${db.chats[chatIndex].messages.length}`);
                 db.chats[chatIndex].messages.push({ text: aiReply, sender: 'ai' });
                 db.chats[chatIndex].lastUpdated = Date.now();
+                // --- Уменьшаем лимит только если AI-ответ не спец-команда ---
                 if (!isSpecialCommandReply(aiReply)) {
                     incrementMessageCount(username);
                 }
                 saveDb();
                 console.log(`[Background AI] Message count incremented for user ${username}. Chat ID: ${numericChatId}`);
 
+                // --- Уведомляем клиента через SSE ---
                 backgroundEventClients.forEach(client => {
                     if (client.username === username) {
                         client.res.write(`data: ${JSON.stringify({ chatId: numericChatId, aiReply })}\n\n`);
@@ -353,12 +341,13 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
                 });
                 chatToUpdateOnCriticalError.lastUpdated = Date.now();
                 saveDb();
-                console.log(`[Background AI] System message about CRITICAL error saved to chat ${numericChatId}.`);
+                 console.log(`[Background AI] System message about CRITICAL error saved to chat ${numericChatId}.`);
             }
         }
     })();
 });
 
+// --- CRUD для папок ---
 app.get('/api/folders', auth, (req, res) => {
     const userFolders = db.folders.filter(f => f.username === req.user.username);
     res.json(userFolders);
@@ -447,7 +436,7 @@ app.put('/api/me', auth, (req, res) => {
     res.json({ username: user.username, displayName: user.displayName, isPro: !!user.isPro });
 });
 
-app.post('/api/admin/setpro', adminAuth, (req, res) => {
+app.post('/api/admin/setpro', (req, res) => {
     const { username, isPro } = req.body;
     const user = db.users.find(u => u.username === username);
     if (!user) return res.status(404).json({ error: 'Нет пользователя' });
@@ -456,15 +445,15 @@ app.post('/api/admin/setpro', adminAuth, (req, res) => {
     res.json({ ok: true, message: `Статус Pro для ${username} обновлен.` });
 });
 
-app.get('/api/admin/pending', adminAuth, (req, res) => {
+app.get('/api/admin/pending', (req, res) => {
     res.json(db.pending.map(u => ({ username: u.username, displayName: u.displayName })));
 });
 
-app.get('/api/admin/users', adminAuth, (req, res) => {
+app.get('/api/admin/users', (req, res) => {
     res.json(db.users.map(u => ({ username: u.username, displayName: u.displayName, isPro: !!u.isPro })));
 });
 
-app.post('/api/admin/approve', adminAuth, (req, res) => {
+app.post('/api/admin/approve', (req, res) => {
     const { username, accept } = req.body;
     const idx = db.pending.findIndex(u => u.username === username);
     if (idx === -1) return res.status(404).json({ error: 'Нет такого пользователя в ожидании' });
@@ -512,7 +501,7 @@ app.post('/api/chat/stream', auth, async (req, res) => {
 });
 
 const CONFIG_FILE = './config.json';
-const defaultConfig = { monitorUrl: process.env.LLAMA_SERVER_URL || 'https://excited-lark-witty.ngrok-free.app/data' };
+const defaultConfig = { monitorUrl: 'https://excited-lark-witty.ngrok-free.app/data' };
 let config;
 try {
     config = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : defaultConfig;
@@ -523,10 +512,11 @@ function saveConfig() {
     catch (e) { console.error('Ошибка при сохранении config.json:', e); }
 }
 
-app.get('/api/monitor-url', adminAuth, (req, res) => res.json({ monitorUrl: config.monitorUrl }));
+app.get('/api/monitor-url', (req, res) => res.json({ monitorUrl: config.monitorUrl }));
 
-app.post('/api/monitor-url', adminAuth, (req, res) => {
-    const { monitorUrl } = req.body;
+app.post('/api/monitor-url', (req, res) => {
+    const { monitorUrl, adminSecret } = req.body;
+    if (adminSecret !== '65195') return res.status(403).json({ error: 'Нет доступа' });
     if (!monitorUrl || typeof monitorUrl !== 'string') return res.status(400).json({ error: 'Некорректная ссылка' });
     config.monitorUrl = monitorUrl;
     saveConfig();
@@ -549,8 +539,11 @@ app.listen(PORT, () => {
     console.log(`ReflexAI сервер (с улучшенной фоновой обработкой) запущен на http://localhost:${PORT}`);
 });
 
+// Проверка: является ли текст спец-командой (например, @ командами)
 function isSpecialCommandReply(text) {
     if (!text) return false;
+    // Добавьте сюда все спец-ответы, которые не должны уменьшать лимит
+    // Например, все ответы на команды из index.js/COMMANDS
     const specialPatterns = [
         /^Текущий заряд батареи:/i,
         /^Текущая температура сервера:/i,
