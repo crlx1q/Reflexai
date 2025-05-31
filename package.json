@@ -1,4 +1,3 @@
-
 {
   "name": "reflex-ai",
   "version": "1.0.0",
@@ -8,13 +7,19 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["ai", "chat", "assistant"],
+  "keywords": [
+    "ai",
+    "chat",
+    "assistant"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
     "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "cors": "^2.8.5"
+    "node-fetch": "^3.3.2",
+    "web-push": "^3.6.7"
   }
 }

@@ -3,13 +3,16 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const cors = require('cors');
+// Динамический импорт node-fetch, как вы и сделали
+const fetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
+
 const app = express();
 const SECRET = 'supersecretkey';
 const PORT = 8000;
 
-// --- Простая база (JSON) ---
+const LLAMA_SERVER_URL = 'https://excited-lark-witty.ngrok-free.app';
+
 const DB_FILE = './db.json';
-// Создаем структуру по умолчанию
 const defaultDb = {
     users: [],
     chats: [],
@@ -18,11 +21,9 @@ const defaultDb = {
     messageUsage: {}
 };
 
-// Инициализируем базу данных
 let db;
 try {
     db = fs.existsSync(DB_FILE) ? JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) : defaultDb;
-    // Проверяем наличие всех необходимых массивов
     db.users = db.users || [];
     db.chats = db.chats || [];
     db.pending = db.pending || [];
@@ -36,19 +37,18 @@ try {
 function saveDb() {
     try {
         fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+        // console.log('[DB Save] База данных успешно сохранена.'); // Лог для подтверждения сохранения
     } catch (error) {
         console.error('Ошибка при сохранении базы данных:', error);
     }
 }
 
-// --- Лимиты сообщений ---
 const MESSAGE_LIMITS = {
     FREE_MESSAGES: 5,
     PRO_MESSAGES: 150,
     RESET_HOURS: 6
 };
 
-// Функция проверки лимитов сообщений
 function checkMessageLimits(username, isPro) {
     if (!db.messageUsage[username]) {
         db.messageUsage[username] = {
@@ -56,18 +56,13 @@ function checkMessageLimits(username, isPro) {
             resetTime: Date.now() + (MESSAGE_LIMITS.RESET_HOURS * 3600000)
         };
     }
-
     const usage = db.messageUsage[username];
     const now = Date.now();
-
-    // Сброс счетчика если время истекло
     if (now >= usage.resetTime) {
         usage.count = 0;
         usage.resetTime = now + (MESSAGE_LIMITS.RESET_HOURS * 3600000);
     }
-
     const limit = isPro ? MESSAGE_LIMITS.PRO_MESSAGES : MESSAGE_LIMITS.FREE_MESSAGES;
-
     return {
         remaining: Math.max(0, limit - usage.count),
         resetTime: usage.resetTime,
@@ -77,20 +72,22 @@ function checkMessageLimits(username, isPro) {
     };
 }
 
-// Функция обновления счетчика сообщений
 function incrementMessageCount(username) {
     const usage = db.messageUsage[username];
     if (usage) {
-        usage.count++;
-        saveDb();
+        const user = db.users.find(u => u.username === username);
+        const limits = checkMessageLimits(username, user ? user.isPro : false);
+        if (usage.count < limits.limit) {
+            usage.count++;
+            saveDb();
+        }
     }
 }
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('.')); // для index.html и статики
+app.use(express.static('.'));
 
-// --- Middleware ---
 function auth(req, res, next) {
     let token = null;
     if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
@@ -105,7 +102,6 @@ function auth(req, res, next) {
     }
 }
 
-// --- Регистрация с ручным подтверждением ---
 app.post('/api/register', (req, res) => {
     const { username, password, displayName } = req.body;
     if (!username || !password || !displayName) return res.status(400).json({ error: 'Все поля обязательны' });
@@ -117,29 +113,6 @@ app.post('/api/register', (req, res) => {
     res.json({ ok: true, message: 'Ожидайте подтверждения администратора' });
 });
 
-// --- Админ подтверждает регистрацию через консоль ---
-setInterval(() => {
-    if (db.pending.length > 0) {
-        const p = db.pending[0];
-        console.log(`\n[Регистрация] Новый пользователь: ${p.username} (${p.displayName})`);
-        console.log('Подтвердить? (y/n):');
-        process.stdin.once('data', (data) => {
-            const answer = data.toString().trim().toLowerCase();
-            if (answer === 'y') {
-                db.users.push({ username: p.username, password: p.password, displayName: p.displayName, isPro: false });
-                db.pending.shift();
-                saveDb();
-                console.log('Пользователь подтвержден!');
-            } else {
-                db.pending.shift();
-                saveDb();
-                console.log('Пользователь отклонен.');
-            }
-        });
-    }
-}, 5000);
-
-// --- Вход ---
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     const user = db.users.find(u => u.username === username && u.password === password);
@@ -148,75 +121,213 @@ app.post('/api/login', (req, res) => {
     res.json({ token });
 });
 
-// --- Получить профиль ---
 app.get('/api/me', auth, (req, res) => {
     const user = db.users.find(u => u.username === req.user.username);
     if (!user) return res.status(401).json({ error: 'Нет пользователя' });
     res.json({ username: user.username, displayName: user.displayName, isPro: !!user.isPro });
 });
 
-// --- CRUD чатов ---
 app.get('/api/chats', auth, (req, res) => {
     const { query } = req.query;
     let userChats = db.chats.filter(c => c.username === req.user.username);
-    
     if (query) {
         const searchQuery = query.toLowerCase();
         userChats = userChats.filter(chat => {
-            // Поиск по заголовку
-            if (chat.title.toLowerCase().includes(searchQuery)) return true;
-            
-            // Поиск по содержимому сообщений
-            return chat.messages.some(msg => 
-                msg.text.toLowerCase().includes(searchQuery)
-            );
+            if (chat.title && chat.title.toLowerCase().includes(searchQuery)) return true;
+            return chat.messages && chat.messages.some(msg => msg.text && msg.text.toLowerCase().includes(searchQuery));
         });
     }
-    
-    res.json(userChats.sort((a, b) => b.id - a.id));
+    res.json(userChats.sort((a, b) => (b.lastUpdated || b.id) - (a.lastUpdated || a.id)));
 });
+
 app.post('/api/chats', auth, (req, res) => {
     const id = Date.now();
-    const chat = { id, username: req.user.username, title: req.body.title || '', messages: [] };
+    const chat = { id, username: req.user.username, title: req.body.title || '', messages: req.body.messages || [], lastUpdated: Date.now() };
     db.chats.push(chat);
     saveDb();
-    res.json(chat);
+    res.status(201).json(chat);
 });
-app.put('/api/chats/:id', auth, (req, res) => {
-    const chat = db.chats.find(c => c.id == req.params.id && c.username === req.user.username);
-    if (!chat) return res.status(404).json({ error: 'Нет чата' });
 
+app.put('/api/chats/:id', auth, (req, res) => {
+    const chatId = parseInt(req.params.id, 10);
+    const chatIndex = db.chats.findIndex(c => c.id === chatId && c.username === req.user.username);
+    if (chatIndex === -1) return res.status(404).json({ error: 'Нет чата' });
+
+    const chat = db.chats[chatIndex];
     const user = db.users.find(u => u.username === req.user.username);
-    
-    // Проверяем, добавляется ли новое сообщение от пользователя
     const oldMessages = chat.messages || [];
     const newMessages = req.body.messages || [];
-    const oldUserMsgCount = oldMessages.filter(m => m.sender === 'user').length;
-    const newUserMsgCount = newMessages.filter(m => m.sender === 'user').length;
-    
-    if (newUserMsgCount > oldUserMsgCount) {
-        // Если добавляется новое сообщение пользователя
+    const isAddingUserMessage = newMessages.length > oldMessages.length && newMessages[newMessages.length - 1].sender === 'user';
+
+    if (isAddingUserMessage) {
         const limits = checkMessageLimits(req.user.username, user.isPro);
         if (!limits.canSend) {
-            return res.status(429).json({
-                error: `Достигнут лимит сообщений (${limits.limit})`,
-                resetTime: limits.resetTime,
-                limit: limits.limit,
-                remaining: limits.remaining
-            });
+            return res.status(429).json({ error: `Достигнут лимит сообщений (${limits.limit})`, resetTime: limits.resetTime, limit: limits.limit, remaining: limits.remaining });
         }
-        incrementMessageCount(req.user.username);
     }
-
-    chat.title = req.body.title;
-    chat.messages = req.body.messages;
+    chat.title = req.body.title !== undefined ? req.body.title : chat.title;
+    chat.messages = newMessages;
+    chat.lastUpdated = Date.now();
+    db.chats[chatIndex] = chat;
     saveDb();
     res.json(chat);
 });
+
 app.delete('/api/chats/:id', auth, (req, res) => {
-    db.chats = db.chats.filter(c => !(c.id == req.params.id && c.username === req.user.username));
-    saveDb();
-    res.json({ ok: true });
+    const chatId = parseInt(req.params.id, 10);
+    const initialLength = db.chats.length;
+    db.chats = db.chats.filter(c => !(c.id === chatId && c.username === req.user.username));
+    if (db.chats.length < initialLength) {
+        db.folders.forEach(folder => {
+            if (folder.username === req.user.username && folder.chatIds) {
+                folder.chatIds = folder.chatIds.filter(id => id !== chatId);
+            }
+        });
+        saveDb();
+        res.json({ ok: true });
+    } else {
+        res.status(404).json({ error: 'Чат не найден или нет прав на удаление' });
+    }
+});
+
+// --- SSE: подписчики для фоновых событий ---
+const backgroundEventClients = [];
+
+app.get('/api/background-events', auth, (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+    const client = { res, username: req.user.username };
+    backgroundEventClients.push(client);
+
+    req.on('close', () => {
+        const idx = backgroundEventClients.indexOf(client);
+        if (idx !== -1) backgroundEventClients.splice(idx, 1);
+    });
+});
+
+// --- ЭНДПОИНТ для фоновой обработки запроса ИИ ---
+app.post('/api/chat/background-request', auth, async (req, res) => {
+    const { chatId: originalChatId, userMessage, chatHistory, temperature, topP, disableSystemReflex, systemMessageContent } = req.body;
+    const { username } = req.user;
+
+    // Преобразуем chatId в число сразу и проверяем
+    const numericChatId = parseInt(originalChatId, 10);
+    if (isNaN(numericChatId)) {
+        console.error(`[Background AI] Invalid chatId received: ${originalChatId}. Must be a number or convertible to one. User: ${username}`);
+        // Не отправляем 202, если chatId некорректен для фоновой задачи
+        return res.status(400).json({ message: "Invalid chatId for background request." });
+    }
+
+    // 1. Немедленно отвечаем клиенту, что запрос принят
+    console.log(`[Background AI] Received request for chat ${numericChatId}, user ${username}. Sending 202 Accepted.`);
+    res.status(202).json({ message: "Запрос принят в обработку." });
+
+    // 2. Выполняем остальную логику асинхронно
+    (async () => {
+        console.log(`[Background AI] Task started for user ${username}, chat ${numericChatId}. Message: "${userMessage.substring(0, 50)}..."`);
+        try {
+            const user = db.users.find(u => u.username === username);
+            if (!user) {
+                console.error(`[Background AI] User ${username} not found for chat ${numericChatId}.`);
+                return;
+            }
+
+            const limits = checkMessageLimits(username, user.isPro);
+            if (!limits.canSend) {
+                console.warn(`[Background AI] User ${username} limit reached for chat ${numericChatId}. Aborting.`);
+                const chatToUpdate = db.chats.find(c => c.id === numericChatId && c.username === username);
+                if (chatToUpdate) {
+                    chatToUpdate.messages.push({
+                        text: `Фоновый запрос не выполнен: достигнут лимит сообщений (${limits.limit}).`,
+                        sender: 'system'
+                    });
+                    chatToUpdate.lastUpdated = Date.now();
+                    saveDb();
+                     console.log(`[Background AI] System message about limit saved to chat ${numericChatId}.`);
+                }
+                return;
+            }
+            console.log(`[Background AI] Limits OK for user ${username}. Proceeding with LLaMA call for chat ${numericChatId}`);
+
+            const messagesPayload = [];
+            if (!disableSystemReflex && systemMessageContent) {
+                messagesPayload.push({ role: 'system', content: systemMessageContent });
+            }
+            messagesPayload.push(...(chatHistory || []));
+            messagesPayload.push({ role: 'user', content: userMessage });
+
+            console.log(`[Background AI] Sending to LLaMA for chat ${numericChatId}. Payload messages count: ${messagesPayload.length}`);
+            
+            const llamaResponse = await fetch(`${LLAMA_SERVER_URL}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: messagesPayload,
+                    temperature: temperature,
+                    top_p: topP
+                }),
+            });
+            console.log(`[Background AI] LLaMA response status for chat ${numericChatId}: ${llamaResponse.status}`);
+
+            if (!llamaResponse.ok) {
+                const errorText = await llamaResponse.text();
+                console.error(`[Background AI] LLaMA server error for chat ${numericChatId}. Status: ${llamaResponse.status}. Body: ${errorText.substring(0, 500)}...`);
+                const chatToUpdateOnError = db.chats.find(c => c.id === numericChatId && c.username === username);
+                if (chatToUpdateOnError) {
+                    chatToUpdateOnError.messages.push({
+                        text: `Ошибка при обработке фонового запроса к ИИ: ${llamaResponse.statusText}`,
+                        sender: 'system'
+                    });
+                    chatToUpdateOnError.lastUpdated = Date.now();
+                    saveDb();
+                    console.log(`[Background AI] System message about LLaMA error saved to chat ${numericChatId}.`);
+                }
+                return;
+            }
+
+            const llamaData = await llamaResponse.json();
+            const aiReply = llamaData.choices && llamaData.choices[0] && llamaData.choices[0].message && llamaData.choices[0].message.content
+                ? llamaData.choices[0].message.content
+                : 'Ошибка: получен пустой ответ от ИИ.';
+            console.log(`[Background AI] Parsed AI reply for chat ${numericChatId}. Length: ${aiReply.length}`);
+
+            const chatIndex = db.chats.findIndex(c => c.id === numericChatId && c.username === username);
+            if (chatIndex !== -1) {
+                console.log(`[Background AI] Found chat for ID ${numericChatId} at index ${chatIndex}. Current messages count: ${db.chats[chatIndex].messages.length}`);
+                db.chats[chatIndex].messages.push({ text: aiReply, sender: 'ai' });
+                db.chats[chatIndex].lastUpdated = Date.now();
+                console.log(`[Background AI] AI reply pushed to chat ${numericChatId}. New messages count: ${db.chats[chatIndex].messages.length}`);
+                saveDb(); // saveDb теперь включает лог при успехе
+                incrementMessageCount(username);
+                console.log(`[Background AI] Message count incremented for user ${username}. Chat ID: ${numericChatId}`);
+
+                // --- Уведомляем клиента через SSE ---
+                backgroundEventClients.forEach(client => {
+                    if (client.username === username) {
+                        client.res.write(`data: ${JSON.stringify({ chatId: numericChatId, aiReply })}\n\n`);
+                    }
+                });
+            } else {
+                console.error(`[Background AI] Chat with ID ${numericChatId} for user ${username} NOT FOUND for saving AI reply.`);
+            }
+            console.log(`[Background AI] Task finished successfully for user ${username}, chat ${numericChatId}.`);
+
+        } catch (error) {
+            console.error(`[Background AI] CRITICAL ERROR in background task for chat ${numericChatId} (original chatId: ${originalChatId}), user ${username}:`, error.message, error.stack);
+            const chatToUpdateOnCriticalError = db.chats.find(c => c.id === numericChatId && c.username === username);
+            if (chatToUpdateOnCriticalError) {
+                chatToUpdateOnCriticalError.messages.push({
+                    text: `Критическая ошибка при обработке фонового запроса. Проверьте логи сервера.`,
+                    sender: 'system'
+                });
+                chatToUpdateOnCriticalError.lastUpdated = Date.now();
+                saveDb();
+                 console.log(`[Background AI] System message about CRITICAL error saved to chat ${numericChatId}.`);
+            }
+        }
+    })();
 });
 
 // --- CRUD для папок ---
@@ -229,21 +340,11 @@ app.post('/api/folders', auth, (req, res) => {
     try {
         const { name } = req.body;
         if (!name) return res.status(400).json({ error: 'Имя папки обязательно' });
-        
-        if (!Array.isArray(db.folders)) {
-            db.folders = [];
-        }
-        
-        const folder = {
-            id: Date.now(),
-            username: req.user.username,
-            name,
-            chatIds: []
-        };
-        
+        if (!Array.isArray(db.folders)) db.folders = [];
+        const folder = { id: Date.now(), username: req.user.username, name, chatIds: [] };
         db.folders.push(folder);
         saveDb();
-        res.json(folder);
+        res.status(201).json(folder);
     } catch (error) {
         console.error('Ошибка при создании папки:', error);
         res.status(500).json({ error: 'Внутренняя ошибка сервера' });
@@ -251,193 +352,152 @@ app.post('/api/folders', auth, (req, res) => {
 });
 
 app.put('/api/folders/:id', auth, (req, res) => {
-    const folder = db.folders.find(f => f.id == req.params.id && f.username === req.user.username);
+    const folderId = parseInt(req.params.id, 10);
+    const folder = db.folders.find(f => f.id === folderId && f.username === req.user.username);
     if (!folder) return res.status(404).json({ error: 'Папка не найдена' });
-    
-    if (req.body.name) folder.name = req.body.name;
-    if (req.body.chatIds) folder.chatIds = req.body.chatIds;
-    
+    if (req.body.name !== undefined) folder.name = req.body.name;
+    if (req.body.chatIds !== undefined) folder.chatIds = req.body.chatIds;
     saveDb();
     res.json(folder);
 });
 
 app.delete('/api/folders/:id', auth, (req, res) => {
-    const folderIndex = db.folders.findIndex(f => f.id == req.params.id && f.username === req.user.username);
+    const folderId = parseInt(req.params.id, 10);
+    const folderIndex = db.folders.findIndex(f => f.id === folderId && f.username === req.user.username);
     if (folderIndex === -1) return res.status(404).json({ error: 'Папка не найдена' });
-    
     db.folders.splice(folderIndex, 1);
     saveDb();
     res.json({ ok: true });
 });
 
-// Обновляем endpoint для перемещения чата в папку
 app.post('/api/chats/:chatId/move', auth, async (req, res) => {
     try {
-        const { folderId } = req.body;
-        const chatId = parseInt(req.params.chatId);
-        
-        // Находим чат
+        const { folderId: targetFolderId } = req.body;
+        const chatId = parseInt(req.params.chatId, 10);
         const chat = db.chats.find(c => c.id === chatId && c.username === req.user.username);
         if (!chat) return res.status(404).json({ error: 'Чат не найден' });
-        
-        // Проверяем существование массива папок
-        if (!Array.isArray(db.folders)) {
-            db.folders = [];
-        }
-        
-        // Удаляем чат из всех папок пользователя
-        db.folders
-            .filter(f => f.username === req.user.username)
-            .forEach(folder => {
-                if (!Array.isArray(folder.chatIds)) {
-                    folder.chatIds = [];
-                }
+        if (!Array.isArray(db.folders)) db.folders = [];
+        db.folders.forEach(folder => {
+            if (folder.username === req.user.username && Array.isArray(folder.chatIds)) {
                 folder.chatIds = folder.chatIds.filter(id => id !== chatId);
-            });
-        
-        // Если указан folderId, добавляем в новую папку
-        if (folderId) {
-            const folder = db.folders.find(f => f.id == folderId && f.username === req.user.username);
-            if (!folder) return res.status(404).json({ error: 'Папка не найдена' });
-            if (!Array.isArray(folder.chatIds)) {
-                folder.chatIds = [];
             }
-            if (!folder.chatIds.includes(chatId)) {
-                folder.chatIds.push(chatId);
+        });
+        if (targetFolderId !== null && targetFolderId !== undefined) {
+            const targetFolder = db.folders.find(f => f.id == targetFolderId && f.username === req.user.username);
+            if (!targetFolder) return res.status(404).json({ error: 'Целевая папка не найдена' });
+            if (!Array.isArray(targetFolder.chatIds)) targetFolder.chatIds = [];
+            if (!targetFolder.chatIds.includes(chatId)) {
+                targetFolder.chatIds.push(chatId);
             }
         }
-        
         saveDb();
-        res.json({ 
-            ok: true,
-            folders: db.folders.filter(f => f.username === req.user.username)
-        });
+        const userFolders = db.folders.filter(f => f.username === req.user.username);
+        const userChats = db.chats.filter(c => c.username === req.user.username).sort((a, b) => (b.lastUpdated || b.id) - (a.lastUpdated || a.id));
+        res.json({ ok: true, folders: userFolders, chats: userChats });
     } catch (error) {
         console.error('Ошибка при перемещении чата:', error);
         res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
 });
 
-// --- Лимиты сообщений ---
 app.get('/api/message-limits', auth, (req, res) => {
     const user = db.users.find(u => u.username === req.user.username);
+    if (!user) return res.status(404).json({ error: "Пользователь не найден для получения лимитов" });
     const limits = checkMessageLimits(req.user.username, user.isPro);
     res.json(limits);
 });
 
-// --- Админ: выдать/снять Pro (через консоль) ---
+app.put('/api/me', auth, (req, res) => {
+    const { displayName } = req.body;
+    if (displayName === undefined || typeof displayName !== 'string') {
+        return res.status(400).json({ error: 'Некорректное отображаемое имя' });
+    }
+    const user = db.users.find(u => u.username === req.user.username);
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    user.displayName = displayName.trim();
+    saveDb();
+    res.json({ username: user.username, displayName: user.displayName, isPro: !!user.isPro });
+});
+
 app.post('/api/admin/setpro', (req, res) => {
     const { username, isPro } = req.body;
     const user = db.users.find(u => u.username === username);
     if (!user) return res.status(404).json({ error: 'Нет пользователя' });
     user.isPro = !!isPro;
     saveDb();
-    res.json({ ok: true });
+    res.json({ ok: true, message: `Статус Pro для ${username} обновлен.` });
 });
 
-// --- API для админки: список ожидающих и подтверждение/отклонение ---
 app.get('/api/admin/pending', (req, res) => {
-    // (Можно добавить простую защиту по IP или секрету, если нужно)
-    res.json(db.pending.map(u => ({
-        username: u.username,
-        displayName: u.displayName
-    })));
+    res.json(db.pending.map(u => ({ username: u.username, displayName: u.displayName })));
 });
 
-// Новый эндпоинт: список всех пользователей для выдачи Pro
 app.get('/api/admin/users', (req, res) => {
-    // (Можно добавить простую защиту по IP или секрету, если нужно)
-    res.json(db.users.map(u => ({
-        username: u.username,
-        displayName: u.displayName,
-        isPro: !!u.isPro
-    })));
+    res.json(db.users.map(u => ({ username: u.username, displayName: u.displayName, isPro: !!u.isPro })));
 });
 
 app.post('/api/admin/approve', (req, res) => {
     const { username, accept } = req.body;
     const idx = db.pending.findIndex(u => u.username === username);
     if (idx === -1) return res.status(404).json({ error: 'Нет такого пользователя в ожидании' });
-    const user = db.pending[idx];
+    const userToProcess = db.pending[idx];
+    db.pending.splice(idx, 1);
     if (accept) {
-        db.users.push({ username: user.username, password: user.password, displayName: user.displayName, isPro: false });
-        db.pending.splice(idx, 1);
+        db.users.push({ username: userToProcess.username, password: userToProcess.password, displayName: userToProcess.displayName, isPro: false });
         saveDb();
         return res.json({ ok: true, message: 'Пользователь подтвержден' });
     } else {
-        db.pending.splice(idx, 1);
         saveDb();
         return res.json({ ok: true, message: 'Пользователь отклонен' });
     }
 });
 
-// Новый endpoint для потокового чата
 app.post('/api/chat/stream', auth, async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-
     try {
-        const response = await fetch(`${serverUrl}/v1/chat/completions`, {
+        const llamaStreamResponse = await fetch(`${LLAMA_SERVER_URL}/v1/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...req.body,
-                stream: true // Включаем поток
-            })
+            body: JSON.stringify({ ...req.body, stream: true })
         });
-
-        // Создаем Reader для чтения потока
-        const reader = response.body.getReader();
+        if (!llamaStreamResponse.ok) {
+            const errorBody = await llamaStreamResponse.text();
+            throw new Error(`LLaMA stream API error: ${llamaStreamResponse.status} ${errorBody}`);
+        }
+        const reader = llamaStreamResponse.body.getReader();
         const decoder = new TextDecoder();
-
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
-            // Декодируем и отправляем каждый чанк
-            const chunk = decoder.decode(value);
+            const chunk = decoder.decode(value, { stream: true });
             res.write(`data: ${chunk}\n\n`);
         }
-
         res.write('event: done\ndata: [DONE]\n\n');
-        res.end();
     } catch (error) {
         console.error('Stream error:', error);
-        res.write(`event: error\ndata: ${error.message}\n\n`);
+        res.write(`event: error\ndata: ${JSON.stringify({ message: error.message || "Stream failed" })}\n\n`);
+    } finally {
         res.end();
     }
 });
 
-// --- Конфиг для tunnelmole monitorUrl ---
 const CONFIG_FILE = './config.json';
-const defaultConfig = {
-    monitorUrl: 'https://rp1wro-ip-95-56-104-203.tunnelmole.net/data'
-};
+const defaultConfig = { monitorUrl: 'https://excited-lark-witty.ngrok-free.app/data' };
 let config;
 try {
-    config = fs.existsSync(CONFIG_FILE)
-        ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))
-        : defaultConfig;
-} catch {
-    config = defaultConfig;
-}
+    config = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : defaultConfig;
+} catch { config = defaultConfig; }
+
 function saveConfig() {
-    try {
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
-    } catch (e) {
-        console.error('Ошибка при сохранении config.json:', e);
-    }
+    try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
+    catch (e) { console.error('Ошибка при сохранении config.json:', e); }
 }
 
-// --- API: получить ссылку monitorUrl ---
-app.get('/api/monitor-url', (req, res) => {
-    res.json({ monitorUrl: config.monitorUrl });
-});
+app.get('/api/monitor-url', (req, res) => res.json({ monitorUrl: config.monitorUrl }));
 
-// --- API: изменить ссылку monitorUrl (требует простой секрет) ---
 app.post('/api/monitor-url', (req, res) => {
-    // Можно добавить простую защиту, например, секрет в теле запроса
     const { monitorUrl, adminSecret } = req.body;
     if (adminSecret !== '65195') return res.status(403).json({ error: 'Нет доступа' });
     if (!monitorUrl || typeof monitorUrl !== 'string') return res.status(400).json({ error: 'Некорректная ссылка' });
@@ -446,30 +506,18 @@ app.post('/api/monitor-url', (req, res) => {
     res.json({ ok: true, monitorUrl });
 });
 
-// --- Новый endpoint для уменьшения лимита сообщений ---
 app.post('/api/message-limits/decrement', auth, (req, res) => {
     const user = db.users.find(u => u.username === req.user.username);
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-
-    const usage = db.messageUsage[req.user.username];
-    if (!usage) return res.status(400).json({ error: 'Лимиты не инициализированы' });
-
     const limits = checkMessageLimits(req.user.username, user.isPro);
     if (!limits.canSend) {
-        return res.status(429).json({
-            error: `Достигнут лимит сообщений (${limits.limit})`,
-            resetTime: limits.resetTime,
-            limit: limits.limit,
-            remaining: limits.remaining
-        });
+        return res.status(429).json({ error: `Достигнут лимит сообщений (${limits.limit})`, resetTime: limits.resetTime, limit: limits.limit, remaining: limits.remaining });
     }
-
-    // Уменьшаем счетчик сообщений
     incrementMessageCount(req.user.username);
-    res.json({ ok: true, remaining: limits.remaining - 1 });
+    const newLimits = checkMessageLimits(req.user.username, user.isPro);
+    res.json({ ok: true, remaining: newLimits.remaining, limit: newLimits.limit, resetTime: newLimits.resetTime });
 });
 
-// --- Запуск ---
 app.listen(PORT, () => {
-    console.log('ReflexAI сервер запущен на http://localhost:' + PORT);
+    console.log(`ReflexAI сервер (с улучшенной фоновой обработкой) запущен на http://localhost:${PORT}`);
 });
