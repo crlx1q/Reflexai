@@ -4,215 +4,285 @@
     <meta charset="UTF-8">
     <title>ReflexAI Admin Console</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
     <style>
-        body { background: #181818; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        .admin-box { background: #232323; border-radius: 10px; box-shadow: 0 8px 32px #0008; padding: 36px 28px; min-width: 340px; max-width: 95vw; }
-        .admin-box h2 { margin-bottom: 18px; }
-        .admin-box form { display: flex; flex-direction: column; gap: 12px; }
-        .admin-box input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #181818; color: #fff; }
-        .admin-box button { padding: 12px; background: #E58320; color: #fff; border: none; border-radius: 5px; font-weight: 600; cursor: pointer; }
-        .admin-console { margin-top: 20px; }
-        .pending-list { margin: 0; padding: 0; list-style: none; }
-        .pending-list li { background: #222; margin-bottom: 10px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .pending-list .info { flex: 1; }
-        .pending-list button { margin-left: 10px; }
-        .feedback { color: #f55; min-height: 18px; font-size: 13px; }
-        .user-list { margin: 0; padding: 0; list-style: none; }
-        .user-list li { background: #222; margin-bottom: 10px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .user-list .info { flex: 1; }
-        .user-list button { margin-left: 10px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #181818; color: #e0e0e0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-box { background: #232323; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); padding: 28px; width: 100%; max-width: 500px; }
+        .admin-box h2 { margin-top: 0; margin-bottom: 24px; color: #E58320; text-align: center; }
+        .admin-box form { display: flex; flex-direction: column; gap: 14px; }
+        .admin-box input[type="password"], .admin-box input[type="text"] { padding: 12px; border-radius: 6px; border: 1px solid #444; background: #1c1c1c; color: #e0e0e0; font-size: 16px; }
+        .admin-box input[type="password"]:focus, .admin-box input[type="text"]:focus { border-color: #E58320; outline: none; box-shadow: 0 0 0 2px rgba(229, 131, 32, 0.3); }
+        .admin-box button { padding: 12px 18px; background: #E58320; color: #fff; border: none; border-radius: 6px; font-weight: 600; font-size: 16px; cursor: pointer; transition: background-color 0.2s ease; }
+        .admin-box button:hover { background: #d47310; }
+        .admin-console { margin-top: 25px; }
+        .admin-console h3 { color: #E58320; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid #444; padding-bottom: 8px;}
+        .pending-list, .user-list { margin: 0; padding: 0; list-style: none; }
+        .pending-list li, .user-list li { background: #2a2a2a; margin-bottom: 10px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
+        .pending-list .info, .user-list .info { flex: 1; min-width: 150px; word-break: break-all;}
+        .pending-list .actions, .user-list .actions { display: flex; gap: 8px; }
+        .pending-list button, .user-list button, #refreshBtn, #refreshUsersBtn { font-size: 14px; padding: 8px 12px; }
+        .accept-btn { background-color: #28a745; }
+        .accept-btn:hover { background-color: #218838; }
+        .reject-btn { background-color: #dc3545; }
+        .reject-btn:hover { background-color: #c82333; }
+        .pro-btn.is-pro { background-color: #6c757d; } /* Серый для "Снять Pro" */
+        .pro-btn.is-pro:hover { background-color: #5a6268; }
+        .pro-btn.not-pro { background-color: #007bff; } /* Синий для "Выдать Pro" */
+        .pro-btn.not-pro:hover { background-color: #0069d9; }
+
+        .feedback { color: #f55; min-height: 20px; font-size: 14px; text-align: center; margin-top: 10px; }
+        #monitorUrlForm { display:flex; gap:10px; align-items:center; }
+        #monitorUrlForm input { flex:1; }
+        hr { border: none; border-top: 1px solid #444; margin: 25px 0; }
     </style>
 </head>
 <body>
     <div class="admin-box">
         <h2>Админ-консоль ReflexAI</h2>
         <form id="adminLoginForm" autocomplete="off">
-            <input type="password" name="adminpass" placeholder="Пароль администратора" required>
+            <input type="password" id="adminPasskey" name="adminpass" placeholder="Ключ администратора" required>
             <button type="submit">Войти</button>
         </form>
-        <div class="feedback" id="adminFeedback"></div>
+        <div class="feedback" id="adminLoginFeedback"></div>
+
         <div class="admin-console" id="adminConsole" style="display:none;">
             <h3>Ожидающие регистрации</h3>
             <ul class="pending-list" id="pendingList"></ul>
-            <button id="refreshBtn">Обновить</button>
-            <hr style="margin:20px 0;">
+            <button id="refreshPendingBtn">Обновить список ожидающих</button>
+            <div class="feedback" id="pendingFeedback"></div>
+
+            <hr>
+
             <h3>Настройки мониторинга</h3>
             <form id="monitorUrlForm" style="display:flex;gap:8px;align-items:center;">
-                <input type="text" id="monitorUrlInput" placeholder="https://...tunnelmole.net/data" style="flex:1;">
-                <button type="submit">Сохранить</button>
+                <input type="text" id="monitorUrlInput" placeholder="URL для мониторинга (напр. https://....ngrok-free.app/data)" style="flex:1;">
+                <button type="submit">Сохранить URL</button>
             </form>
             <div class="feedback" id="monitorUrlFeedback"></div>
-            <hr style="margin:20px 0;">
-            <h3>Пользователи (выдача Pro)</h3>
+
+            <hr>
+
+            <h3>Пользователи (управление Pro)</h3>
             <ul class="user-list" id="userList"></ul>
-            <button id="refreshUsersBtn">Обновить пользователей</button>
+            <button id="refreshUsersBtn">Обновить список пользователей</button>
             <div class="feedback" id="userListFeedback"></div>
         </div>
     </div>
+
     <script>
-        // --- Простой пароль ---
-        const ADMIN_PASSWORD = "65195";
+        // Ключ администратора будет храниться здесь после входа
+        let sessionAdminPasskey = '';
+
         const loginForm = document.getElementById('adminLoginForm');
-        const feedback = document.getElementById('adminFeedback');
+        const adminLoginFeedback = document.getElementById('adminLoginFeedback');
         const adminConsole = document.getElementById('adminConsole');
+
         const pendingList = document.getElementById('pendingList');
-        const refreshBtn = document.getElementById('refreshBtn');
+        const refreshPendingBtn = document.getElementById('refreshPendingBtn');
+        const pendingFeedback = document.getElementById('pendingFeedback');
 
-        let adminAuthed = false;
-
-        // --- Monitor URL управление ---
         const monitorUrlForm = document.getElementById('monitorUrlForm');
         const monitorUrlInput = document.getElementById('monitorUrlInput');
         const monitorUrlFeedback = document.getElementById('monitorUrlFeedback');
 
-        // --- Управление пользователями ---
         const userList = document.getElementById('userList');
         const refreshUsersBtn = document.getElementById('refreshUsersBtn');
         const userListFeedback = document.getElementById('userListFeedback');
 
         loginForm.onsubmit = (e) => {
             e.preventDefault();
-            const pass = loginForm.adminpass.value;
-            if (pass === ADMIN_PASSWORD) {
-                adminAuthed = true;
-                loginForm.style.display = 'none';
-                feedback.textContent = '';
-                afterAdminLogin();
-            } else {
-                feedback.textContent = 'Неверный пароль';
+            const pass = document.getElementById('adminPasskey').value;
+            if (!pass) {
+                adminLoginFeedback.textContent = 'Ключ администратора не может быть пустым.';
+                return;
             }
+            sessionAdminPasskey = pass; // Сохраняем ключ для последующих запросов
+            
+            // Просто скрываем форму входа и показываем консоль.
+            // Реальная проверка ключа будет на сервере при каждом действии.
+            loginForm.style.display = 'none';
+            adminLoginFeedback.textContent = '';
+            adminConsole.style.display = 'block';
+            afterAdminLogin(); // Загружаем данные
         };
 
-        async function loadPending() {
-            pendingList.innerHTML = '<li>Загрузка...</li>';
+        function afterAdminLogin() {
+            loadPending();
+            loadMonitorUrlFromServer(); // Загружаем текущий URL с сервера
+            loadUsers();
+        }
+
+        async function fetchData(endpoint, feedbackElement, listElement, processDataCallback, noDataMessage = 'Нет данных') {
+            if (!sessionAdminPasskey) {
+                feedbackElement.textContent = 'Ключ администратора не введен.';
+                if (listElement) listElement.innerHTML = `<li>${feedbackElement.textContent}</li>`;
+                return null;
+            }
+            if (listElement) listElement.innerHTML = '<li>Загрузка...</li>';
+            feedbackElement.textContent = '';
+
             try {
-                // Получаем список ожидающих через сервер (добавьте эндпоинт /api/admin/pending)
-                const resp = await fetch('/api/admin/pending');
-                if (!resp.ok) throw new Error('Ошибка доступа');
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminPasskey: sessionAdminPasskey })
+                });
+
+                if (resp.status === 403) {
+                    throw new Error('Неверный ключ администратора или нет доступа.');
+                }
+                if (!resp.ok) {
+                    const errorData = await resp.json().catch(() => ({ error: `Ошибка сервера: ${resp.status}` }));
+                    throw new Error(errorData.error || `Ошибка сети: ${resp.status}`);
+                }
+                
                 const data = await resp.json();
-                pendingList.innerHTML = '';
-                if (!data.length) {
-                    pendingList.innerHTML = '<li>Нет ожидающих регистраций</li>';
-                    return;
+                if (listElement) {
+                    listElement.innerHTML = ''; // Очищаем перед добавлением
+                    if (!data || (Array.isArray(data) && data.length === 0)) {
+                        listElement.innerHTML = `<li>${noDataMessage}</li>`;
+                    } else {
+                        processDataCallback(data);
+                    }
                 }
-                for (const user of data) {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName})</span>
-                        <button class="accept-btn">Принять</button>
-                        <button class="reject-btn">Отклонить</button>`;
-                    li.querySelector('.accept-btn').onclick = () => handleAction(user.username, true);
-                    li.querySelector('.reject-btn').onclick = () => handleAction(user.username, false);
-                    pendingList.appendChild(li);
-                }
+                return data; // Возвращаем данные для случаев, когда они нужны напрямую (как для monitorUrl)
             } catch (e) {
-                pendingList.innerHTML = '<li>Ошибка загрузки</li>';
+                console.error(`Ошибка при запросе к ${endpoint}:`, e);
+                feedbackElement.textContent = e.message || 'Ошибка загрузки данных.';
+                if (listElement) listElement.innerHTML = `<li>${feedbackElement.textContent}</li>`;
+                return null;
             }
         }
 
-        async function handleAction(username, accept) {
+
+        function loadPending() {
+            fetchData('/api/admin/pending', pendingFeedback, pendingList, (data) => {
+                data.forEach(user => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'})</span>
+                        <div class="actions">
+                            <button class="accept-btn">Принять</button>
+                            <button class="reject-btn">Отклонить</button>
+                        </div>`;
+                    li.querySelector('.accept-btn').onclick = () => handleRegistrationAction(user.username, true);
+                    li.querySelector('.reject-btn').onclick = () => handleRegistrationAction(user.username, false);
+                    pendingList.appendChild(li);
+                });
+            }, 'Нет ожидающих регистраций');
+        }
+
+        async function handleRegistrationAction(username, accept) {
+            pendingFeedback.textContent = 'Обработка...';
             try {
                 const resp = await fetch('/api/admin/approve', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, accept })
+                    body: JSON.stringify({ username, accept, adminPasskey: sessionAdminPasskey })
                 });
-                if (!resp.ok) throw new Error('Ошибка');
-                loadPending();
-            } catch {
-                alert('Ошибка запроса');
+                if (resp.status === 403) throw new Error('Неверный ключ администратора.');
+                if (!resp.ok) {
+                     const errorData = await resp.json().catch(() => ({ error: `Ошибка сервера: ${resp.status}` }));
+                    throw new Error(errorData.error || `Ошибка сети: ${resp.status}`);
+                }
+                const result = await resp.json();
+                pendingFeedback.textContent = result.message || (accept ? 'Пользователь принят.' : 'Пользователь отклонен.');
+                loadPending(); // Обновить список
+            } catch (e) {
+                console.error('Ошибка действия с регистрацией:', e);
+                pendingFeedback.textContent = e.message || 'Ошибка запроса.';
             }
         }
+        
+        refreshPendingBtn.onclick = loadPending;
 
-        refreshBtn.onclick = loadPending;
-
-        async function loadMonitorUrl() {
+        async function loadMonitorUrlFromServer() {
+            // Этот эндпоинт GET и не требует adminPasskey для чтения
             try {
-                const resp = await fetch('/api/monitor-url');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    monitorUrlInput.value = data.monitorUrl || '';
-                }
-            } catch {}
+                monitorUrlFeedback.textContent = 'Загрузка URL...';
+                const resp = await fetch('/api/monitor-url'); // GET запрос
+                if (!resp.ok) throw new Error('Не удалось загрузить URL мониторинга.');
+                const data = await resp.json();
+                monitorUrlInput.value = data.monitorUrl || '';
+                monitorUrlFeedback.textContent = '';
+            } catch (e) {
+                console.error('Ошибка загрузки URL мониторинга:', e);
+                monitorUrlFeedback.textContent = e.message || 'Ошибка загрузки URL.';
+            }
         }
 
         monitorUrlForm.onsubmit = async (e) => {
             e.preventDefault();
-            monitorUrlFeedback.textContent = '';
+            if (!sessionAdminPasskey) {
+                monitorUrlFeedback.textContent = 'Ключ администратора не введен.';
+                return;
+            }
+            monitorUrlFeedback.textContent = 'Сохранение...';
             const url = monitorUrlInput.value.trim();
             if (!url) {
-                monitorUrlFeedback.textContent = 'Введите ссылку';
+                monitorUrlFeedback.textContent = 'Введите ссылку URL.';
                 return;
             }
             try {
-                const resp = await fetch('/api/monitor-url', {
+                const resp = await fetch('/api/monitor-url', { // Это POST, он защищен adminAuth на сервере
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ monitorUrl: url, adminSecret: "65195" })
+                    body: JSON.stringify({ monitorUrl: url, adminPasskey: sessionAdminPasskey })
                 });
-                if (!resp.ok) throw new Error('Ошибка сохранения');
-                monitorUrlFeedback.textContent = 'Ссылка сохранена!';
-            } catch {
-                monitorUrlFeedback.textContent = 'Ошибка сохранения';
+                if (resp.status === 403) throw new Error('Неверный ключ администратора.');
+                if (!resp.ok) {
+                     const errorData = await resp.json().catch(() => ({ error: `Ошибка сервера: ${resp.status}` }));
+                    throw new Error(errorData.error || `Ошибка сети: ${resp.status}`);
+                }
+                await resp.json();
+                monitorUrlFeedback.textContent = 'URL сохранен!';
+            } catch (e) {
+                console.error('Ошибка сохранения URL мониторинга:', e);
+                monitorUrlFeedback.textContent = e.message || 'Ошибка сохранения URL.';
             }
         };
 
-        // Загрузка пользователей для выдачи Pro
-        async function loadUsers() {
-            userList.innerHTML = '<li>Загрузка...</li>';
-            userListFeedback.textContent = '';
-            try {
-                // Получаем список пользователей через сервер (добавьте эндпоинт /api/admin/users)
-                const resp = await fetch('/api/admin/users');
-                if (!resp.ok) throw new Error('Ошибка доступа');
-                const data = await resp.json();
-                userList.innerHTML = '';
-                if (!data.length) {
-                    userList.innerHTML = '<li>Нет пользователей</li>';
-                    return;
-                }
-                for (const user of data) {
+        function loadUsers() {
+            fetchData('/api/admin/users', userListFeedback, userList, (data) => {
+                data.forEach(user => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName}) 
-                        <span style="color:${user.isPro ? '#3ee97c' : '#f55'};font-weight:600;margin-left:8px;">${user.isPro ? 'PRO' : 'FREE'}</span>
+                    const proStatusText = user.isPro ? 'PRO' : 'FREE';
+                    const proButtonText = user.isPro ? 'Снять Pro' : 'Выдать Pro';
+                    const proButtonClass = user.isPro ? 'is-pro' : 'not-pro';
+                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'}) 
+                        <span style="color:${user.isPro ? '#3ee97c' : '#f55'};font-weight:600;margin-left:8px;">${proStatusText}</span>
                     </span>
-                    <button class="pro-btn" style="background:${user.isPro ? '#555' : '#3ee97c'};color:#fff;">
-                        ${user.isPro ? 'Снять Pro' : 'Выдать Pro'}
-                    </button>`;
+                    <div class="actions">
+                        <button class="pro-btn ${proButtonClass}">${proButtonText}</button>
+                    </div>`;
                     li.querySelector('.pro-btn').onclick = () => handleProAction(user.username, !user.isPro);
                     userList.appendChild(li);
-                }
-            } catch (e) {
-                userList.innerHTML = '<li>Ошибка загрузки</li>';
-                userListFeedback.textContent = 'Ошибка загрузки пользователей';
-            }
+                });
+            }, 'Нет зарегистрированных пользователей');
         }
 
         async function handleProAction(username, setPro) {
-            userListFeedback.textContent = '';
+            userListFeedback.textContent = 'Обработка...';
             try {
                 const resp = await fetch('/api/admin/setpro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, isPro: setPro })
+                    body: JSON.stringify({ username, isPro: setPro, adminPasskey: sessionAdminPasskey })
                 });
-                if (!resp.ok) throw new Error('Ошибка');
-                await loadUsers();
-                userListFeedback.textContent = setPro ? 'Pro выдан!' : 'Pro снят!';
-            } catch {
-                userListFeedback.textContent = 'Ошибка запроса';
+                if (resp.status === 403) throw new Error('Неверный ключ администратора.');
+                 if (!resp.ok) {
+                     const errorData = await resp.json().catch(() => ({ error: `Ошибка сервера: ${resp.status}` }));
+                    throw new Error(errorData.error || `Ошибка сети: ${resp.status}`);
+                }
+                const result = await resp.json();
+                userListFeedback.textContent = result.message || (setPro ? `Pro статус выдан ${username}.` : `Pro статус снят с ${username}.`);
+                loadUsers(); // Обновить список
+            } catch (e) {
+                console.error('Ошибка действия с Pro статусом:', e);
+                userListFeedback.textContent = e.message || 'Ошибка запроса.';
             }
         }
 
         refreshUsersBtn.onclick = loadUsers;
 
-        // После входа админа — загрузить monitorUrl и пользователей
-        function afterAdminLogin() {
-            adminConsole.style.display = '';
-            loadPending();
-            loadMonitorUrl();
-            loadUsers();
-        }
     </script>
 </body>
 </html>
