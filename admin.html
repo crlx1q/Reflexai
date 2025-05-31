@@ -1,318 +1,81 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>ReflexAI Admin Console</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #181818; color: #e0e0e0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
-        .admin-box { background: #232323; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); padding: 25px 30px; width: 100%; max-width: 500px; }
-        .admin-box h2 { margin-top: 0; margin-bottom: 20px; color: #E58320; text-align: center; }
-        .admin-box form { display: flex; flex-direction: column; gap: 15px; }
-        .admin-box input[type="password"], .admin-box input[type="text"] { padding: 12px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #e0e0e0; font-size: 16px; }
-        .admin-box input[type="password"]:focus, .admin-box input[type="text"]:focus { border-color: #E58320; outline: none; box-shadow: 0 0 0 2px rgba(229, 131, 32, 0.3); }
-        .admin-box button { padding: 12px 18px; background: #E58320; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 16px; transition: background-color 0.2s ease; }
-        .admin-box button:hover { background: #d47310; }
-        .admin-console { margin-top: 25px; }
-        .admin-console h3 { margin-top: 20px; margin-bottom: 10px; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 5px;}
-        .list-container { max-height: 200px; overflow-y: auto; background: #2a2a2a; border-radius: 6px; padding: 5px;}
-        .pending-list, .user-list { margin: 0; padding: 0; list-style: none; }
-        .pending-list li, .user-list li { background: #333; margin: 8px; padding: 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .pending-list .info, .user-list .info { flex: 1; min-width: 150px; }
-        .pending-list .actions, .user-list .actions { display: flex; gap: 8px; }
-        .pending-list button, .user-list button, #refreshBtn, #refreshUsersBtn { font-size: 13px; padding: 6px 10px; }
-        .accept-btn { background-color: #28a745; }
-        .accept-btn:hover { background-color: #218838; }
-        .reject-btn, .pro-btn[data-is-pro="true"] { background-color: #dc3545; }
-        .reject-btn:hover, .pro-btn[data-is-pro="true"]:hover { background-color: #c82333; }
-        .pro-btn[data-is-pro="false"] { background-color: #007bff; }
-        .pro-btn[data-is-pro="false"]:hover { background-color: #0069d9; }
-        .feedback { color: #f55; min-height: 20px; font-size: 14px; text-align: center; margin-top: 10px; }
-        hr { border: none; border-top: 1px solid #444; margin: 25px 0; }
-        #logoutBtn { background-color: #6c757d; margin-top: 20px; width: 100%;}
-        #logoutBtn:hover { background-color: #5a6268;}
-    </style>
+  <meta charset="UTF-8">
+  <title>ReflexAI Admin Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { background: #181818; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .admin-box { background: #232323; border-radius: 10px; padding: 36px 28px; min-width: 340px; max-width: 95vw; }
+    .admin-box h2 { margin-bottom: 18px; }
+    .admin-box form { display: flex; flex-direction: column; gap: 12px; }
+    .admin-box input, button { padding: 10px; border-radius: 5px; border: none; }
+    .admin-box input { background: #181818; border: 1px solid #444; color: #fff; }
+    .admin-box button { background: #E58320; color: #fff; font-weight: bold; cursor: pointer; }
+    .feedback { color: #f55; font-size: 13px; margin-top: 8px; }
+    .admin-console { display: none; margin-top: 20px; }
+  </style>
 </head>
 <body>
-    <div class="admin-box">
-        <h2>Админ-консоль ReflexAI</h2>
-        <form id="adminLoginForm" autocomplete="off">
-            <input type="password" id="adminpass" name="adminpass" placeholder="Пароль администратора" required>
-            <button type="submit">Войти</button>
-        </form>
-        <div class="feedback" id="adminFeedback"></div>
+  <div class="admin-box">
+    <h2>ReflexAI Admin</h2>
+    <form id="adminLoginForm" autocomplete="off">
+      <input type="password" name="adminpass" placeholder="Пароль администратора" required>
+      <button type="submit">Войти</button>
+    </form>
+    <div class="feedback" id="adminFeedback"></div>
 
-        <div class="admin-console" id="adminConsole" style="display:none;">
-            <h3>Ожидающие регистрации</h3>
-            <div class="list-container">
-                <ul class="pending-list" id="pendingList"></ul>
-            </div>
-            <button id="refreshBtn" style="margin-top:10px;">Обновить список</button>
-            
-            <hr>
-            <h3>Настройки мониторинга</h3>
-            <form id="monitorUrlForm" style="display:flex; gap:8px; align-items:center;">
-                <input type="text" id="monitorUrlInput" placeholder="https://...ngrok-free.app/data" style="flex:1;">
-                <button type="submit">Сохранить</button>
-            </form>
-            <div class="feedback" id="monitorUrlFeedback"></div>
-            
-            <hr>
-            <h3>Пользователи (выдача Pro)</h3>
-            <div class="list-container">
-                 <ul class="user-list" id="userList"></ul>
-            </div>
-            <button id="refreshUsersBtn" style="margin-top:10px;">Обновить пользователей</button>
-            <div class="feedback" id="userListFeedback"></div>
-
-            <button id="logoutBtn">Выйти из админ-панели</button>
-        </div>
+    <div class="admin-console" id="adminConsole">
+      <h3>Ожидающие регистрации</h3>
+      <ul id="pendingList" style="list-style:none;padding:0;"></ul>
     </div>
+  </div>
 
-    <script>
-        const loginForm = document.getElementById('adminLoginForm');
-        const adminFeedback = document.getElementById('adminFeedback');
-        const adminConsole = document.getElementById('adminConsole');
-        const pendingList = document.getElementById('pendingList');
-        const refreshBtn = document.getElementById('refreshBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
+  <script>
+    const loginForm = document.getElementById('adminLoginForm');
+    const feedback = document.getElementById('adminFeedback');
+    const adminConsole = document.getElementById('adminConsole');
+    const pendingList = document.getElementById('pendingList');
+    let adminToken = null;
 
-        const monitorUrlForm = document.getElementById('monitorUrlForm');
-        const monitorUrlInput = document.getElementById('monitorUrlInput');
-        const monitorUrlFeedback = document.getElementById('monitorUrlFeedback');
+    loginForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const pass = loginForm.adminpass.value;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass })
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        adminToken = data.token;
+        loginForm.style.display = 'none';
+        feedback.textContent = '';
+        adminConsole.style.display = 'block';
+        loadPending();
+      } catch {
+        feedback.textContent = 'Неверный пароль';
+      }
+    };
 
-        const userList = document.getElementById('userList');
-        const refreshUsersBtn = document.getElementById('refreshUsersBtn');
-        const userListFeedback = document.getElementById('userListFeedback');
-
-        const ADMIN_TOKEN_KEY = 'reflexAdminToken';
-
-        function getAdminToken() {
-            return localStorage.getItem(ADMIN_TOKEN_KEY);
-        }
-
-        function saveAdminToken(token) {
-            localStorage.setItem(ADMIN_TOKEN_KEY, token);
-        }
-
-        function removeAdminToken() {
-            localStorage.removeItem(ADMIN_TOKEN_KEY);
-        }
-
-        loginForm.onsubmit = async (e) => {
-            e.preventDefault();
-            const password = loginForm.adminpass.value;
-            adminFeedback.textContent = 'Вход...';
-            try {
-                const response = await fetch('/api/admin/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ adminpass: password })
-                });
-                const data = await response.json();
-                if (response.ok && data.ok && data.token) {
-                    saveAdminToken(data.token);
-                    showAdminConsole();
-                } else {
-                    adminFeedback.textContent = data.error || 'Неверный пароль или ошибка сервера.';
-                    loginForm.adminpass.value = '';
-                }
-            } catch (error) {
-                console.error("Ошибка входа:", error);
-                adminFeedback.textContent = 'Ошибка сети при попытке входа.';
-            }
-        };
-        
-        logoutBtn.onclick = () => {
-            removeAdminToken();
-            showLoginForm();
-        };
-
-        function showAdminConsole() {
-            loginForm.style.display = 'none';
-            adminFeedback.textContent = '';
-            adminConsole.style.display = 'block';
-            loadPending();
-            loadMonitorUrl();
-            loadUsers();
-        }
-
-        function showLoginForm() {
-            loginForm.style.display = 'flex'; // или 'block' в зависимости от исходного display
-            adminConsole.style.display = 'none';
-            adminFeedback.textContent = 'Вы вышли из системы.';
-            loginForm.adminpass.value = '';
-        }
-
-        async function makeAdminApiRequest(url, options = {}) {
-            const token = getAdminToken();
-            if (!token) {
-                showLoginForm();
-                throw new Error("Нет токена администратора");
-            }
-
-            const defaultHeaders = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            };
-            
-            options.headers = { ...defaultHeaders, ...options.headers };
-
-            const response = await fetch(url, options);
-            if (response.status === 401 || response.status === 403) { // Не авторизован или запрещено
-                removeAdminToken();
-                showLoginForm();
-                const errorData = await response.json().catch(() => ({ error: "Ошибка авторизации" }));
-                throw new Error(errorData.error || "Ошибка авторизации");
-            }
-            return response;
-        }
-
-
-        async function loadPending() {
-            pendingList.innerHTML = '<li>Загрузка...</li>';
-            try {
-                const resp = await makeAdminApiRequest('/api/admin/pending');
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка загрузки ожидающих');
-                const data = await resp.json();
-                pendingList.innerHTML = '';
-                if (!data.length) {
-                    pendingList.innerHTML = '<li>Нет ожидающих регистраций</li>';
-                    return;
-                }
-                data.forEach(user => {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'})</span>
-                                    <div class="actions">
-                                        <button class="accept-btn">Принять</button>
-                                        <button class="reject-btn">Отклонить</button>
-                                    </div>`;
-                    li.querySelector('.accept-btn').onclick = () => handleUserAction(user.username, true);
-                    li.querySelector('.reject-btn').onclick = () => handleUserAction(user.username, false);
-                    pendingList.appendChild(li);
-                });
-            } catch (e) {
-                console.error("Ошибка загрузки ожидающих:", e);
-                pendingList.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
-            }
-        }
-
-        async function handleUserAction(username, accept) {
-            try {
-                const resp = await makeAdminApiRequest('/api/admin/approve', {
-                    method: 'POST',
-                    body: JSON.stringify({ username, accept })
-                });
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка обработки пользователя');
-                await resp.json(); // Можно проверить data.message
-                loadPending(); // Обновить список
-            } catch (e) {
-                console.error("Ошибка действия с пользователем:", e);
-                alert(`Ошибка: ${e.message}`);
-            }
-        }
-
-        refreshBtn.onclick = loadPending;
-
-        async function loadMonitorUrl() {
-            monitorUrlFeedback.textContent = '';
-            try {
-                const resp = await makeAdminApiRequest('/api/monitor-url');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    monitorUrlInput.value = data.monitorUrl || '';
-                } else {
-                     monitorUrlFeedback.textContent = (await resp.json()).error || 'Ошибка загрузки URL';
-                }
-            } catch(e) {
-                console.error("Ошибка загрузки URL мониторинга:", e);
-                monitorUrlFeedback.textContent = `Ошибка: ${e.message}`;
-            }
-        }
-
-        monitorUrlForm.onsubmit = async (e) => {
-            e.preventDefault();
-            monitorUrlFeedback.textContent = 'Сохранение...';
-            const url = monitorUrlInput.value.trim();
-            if (!url) {
-                monitorUrlFeedback.textContent = 'Введите ссылку';
-                return;
-            }
-            try {
-                const resp = await makeAdminApiRequest('/api/monitor-url', {
-                    method: 'POST',
-                    body: JSON.stringify({ monitorUrl: url }) // adminSecret больше не нужен здесь, т.к. есть токен
-                });
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка сохранения URL');
-                monitorUrlFeedback.textContent = 'Ссылка сохранена!';
-            } catch (e) {
-                console.error("Ошибка сохранения URL мониторинга:", e);
-                monitorUrlFeedback.textContent = `Ошибка: ${e.message}`;
-            }
-        };
-
-        async function loadUsers() {
-            userList.innerHTML = '<li>Загрузка...</li>';
-            userListFeedback.textContent = '';
-            try {
-                const resp = await makeAdminApiRequest('/api/admin/users');
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка загрузки пользователей');
-                const data = await resp.json();
-                userList.innerHTML = '';
-                if (!data.length) {
-                    userList.innerHTML = '<li>Нет пользователей</li>';
-                    return;
-                }
-                data.forEach(user => {
-                    const li = document.createElement('li');
-                    const isPro = !!user.isPro; // Убедимся, что это булево значение
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'}) 
-                        <span style="color:${isPro ? '#3ee97c' : '#f55'};font-weight:600;margin-left:8px;">${isPro ? 'PRO' : 'FREE'}</span>
-                    </span>
-                    <div class="actions">
-                        <button class="pro-btn" data-is-pro="${isPro}">
-                            ${isPro ? 'Снять Pro' : 'Выдать Pro'}
-                        </button>
-                    </div>`;
-                    li.querySelector('.pro-btn').onclick = () => handleProAction(user.username, !isPro);
-                    userList.appendChild(li);
-                });
-            } catch (e) {
-                console.error("Ошибка загрузки пользователей:", e);
-                userList.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
-                userListFeedback.textContent = `Ошибка загрузки: ${e.message}`;
-            }
-        }
-
-        async function handleProAction(username, setPro) {
-            userListFeedback.textContent = 'Обновление...';
-            try {
-                const resp = await makeAdminApiRequest('/api/admin/setpro', {
-                    method: 'POST',
-                    body: JSON.stringify({ username, isPro: setPro })
-                });
-                if (!resp.ok) throw new Error((await resp.json()).error || 'Ошибка изменения Pro статуса');
-                const data = await resp.json();
-                await loadUsers(); // Обновить список пользователей
-                userListFeedback.textContent = data.message || (setPro ? 'Pro выдан!' : 'Pro снят!');
-            } catch (e) {
-                console.error("Ошибка действия с Pro статусом:", e);
-                userListFeedback.textContent = `Ошибка: ${e.message}`;
-            }
-        }
-
-        refreshUsersBtn.onclick = loadUsers;
-        
-        // Проверка токена при загрузке страницы
-        if (getAdminToken()) {
-            // Можно добавить проверку валидности токена, сделав тестовый запрос
-            // Например, к /api/admin/pending или новому эндпоинту /api/admin/check-auth
-            // Для простоты, пока просто показываем консоль, если токен есть
-            showAdminConsole();
-        } else {
-            showLoginForm();
-        }
-
-    </script>
+    async function loadPending() {
+      pendingList.innerHTML = '<li>Загрузка...</li>';
+      try {
+        const res = await fetch('/api/admin/pending', {
+          headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        const data = await res.json();
+        pendingList.innerHTML = '';
+        data.forEach(user => {
+          const li = document.createElement('li');
+          li.textContent = `${user.username} (${user.displayName})`;
+          pendingList.appendChild(li);
+        });
+      } catch {
+        pendingList.innerHTML = '<li>Ошибка загрузки</li>';
+      }
+    }
+  </script>
 </body>
 </html>
