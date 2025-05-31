@@ -54,4 +54,5 @@ app.post('/api/monitor-url', adminAuth, (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`✅ Сервер запущен на http://localhost:${PORT}`);
+    console.log('ADMIN_SECRET:', ADMIN_SECRET);
 });
