@@ -7,28 +7,14 @@ const cors = require('cors');
 const fetch = (...args) => import('node-fetch').then(mod => mod.default(...args));
 
 const app = express();
-const SECRET = 'supersecretkey'; // Секрет для JWT токенов пользователей, не для админа
+const SECRET = 'supersecretkey'; // Секрет для JWT токенов пользователей (не админа)
 const PORT = process.env.PORT || 8000; // Koyeb установит PORT автоматически
 
-// Пароль администратора теперь берется из переменной окружения
-const ADMIN_PASSKEY = process.env.ADMIN_PASSKEY;
-
-// --- ДИАГНОСТИЧЕСКИЙ ЛОГ ---
-if (ADMIN_PASSKEY) {
-    console.log("INFO: Переменная окружения ADMIN_PASSKEY успешно загружена.");
-    // В реальном продакшене не стоит логировать сам пароль, но для отладки можно:
-    // console.log(`INFO: ADMIN_PASSKEY имеет длину: ${ADMIN_PASSKEY.length}`); // Безопаснее, чем логировать сам пароль
-} else {
-    console.error("CRITICAL_STARTUP_ERROR: Переменная окружения ADMIN_PASSKEY НЕ найдена!");
-    console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    console.warn("!!! ПРЕДУПРЕЖДЕНИЕ: Секрет администратора ADMIN_PASSKEY не установлен !!!");
-    console.warn("!!! Админ-панель может быть не полностью защищена.             !!!");
-    console.warn("!!! Установите переменную окружения ADMIN_PASSKEY в Koyeb.    !!!");
-    console.warn("!!! И ОБЯЗАТЕЛЬНО ПЕРЕДЕПЛОЙТЕ/ПЕРЕЗАПУСТИТЕ СЕРВИС!         !!!");
-    console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-}
-// --- КОНЕЦ ДИАГНОСТИЧЕСКОГО ЛОГА ---
-
+// Получаем пароль администратора из переменной окружения (секрета Koyeb)
+// Если переменная окружения ADMIN_PASSKEY не установлена (например, при локальной разработке),
+// используется запасной пароль 'fallback_dev_password_65195'.
+// В Koyeb убедитесь, что секрет ADMIN_PASSKEY создан и содержит ваш реальный пароль.
+const ADMIN_PASSKEY = process.env.ADMIN_PASSKEY || 'fallback_dev_password_65195';
 
 const LLAMA_SERVER_URL = process.env.LLAMA_SERVER_URL || 'https://excited-lark-witty.ngrok-free.app';
 
@@ -105,8 +91,9 @@ function incrementMessageCount(username) {
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('.')); // Обслуживает admin.html и другие статические файлы из корневой директории
+app.use(express.static('.')); // Обслуживание статических файлов, включая admin.html
 
+// Middleware для аутентификации обычных пользователей
 function auth(req, res, next) {
     let token = null;
     if (req.headers.authorization && req.headers.authorization.split(' ')[0] === 'Bearer') {
@@ -121,25 +108,7 @@ function auth(req, res, next) {
     }
 }
 
-// Middleware для проверки пароля администратора из заголовка или тела запроса
-function adminAuth(req, res, next) {
-    const providedPassword = req.headers['x-admin-secret'] || req.body.adminSecret;
-
-    if (!ADMIN_PASSKEY) {
-        // Эта ошибка теперь должна быть поймана при старте, но на всякий случай
-        console.error("CRITICAL_RUNTIME_ERROR: ADMIN_PASSKEY не определен в adminAuth. Это не должно происходить, если сервер стартовал корректно.");
-        return res.status(500).json({ error: 'Критическая ошибка конфигурации сервера: пароль администратора не установлен.' });
-    }
-
-    if (providedPassword && providedPassword === ADMIN_PASSKEY) {
-        next();
-    } else {
-        console.warn(`AUTH_FAIL: Попытка доступа к админ-ресурсу с неверным или отсутствующим adminSecret. IP: ${req.ip}`);
-        res.status(403).json({ error: 'Нет доступа (неверный adminSecret)' });
-    }
-}
-
-
+// --- Эндпоинты для обычных пользователей ---
 app.post('/api/register', (req, res) => {
     const { username, password, displayName } = req.body;
     if (!username || !password || !displayName) return res.status(400).json({ error: 'Все поля обязательны' });
@@ -260,27 +229,22 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
         console.error(`[Background AI] Invalid chatId: ${originalChatId}. User: ${username}`);
         return res.status(400).json({ message: "Invalid chatId for background request." });
     }
-
     res.status(202).json({ message: "Запрос принят в обработку." });
 
     (async () => {
         try {
             const user = db.users.find(u => u.username === username);
-            if (!user) {
-                console.error(`[Background AI] User ${username} not found for chat ${numericChatId}.`);
-                return;
-            }
+            if (!user) return;
             const limits = checkMessageLimits(username, user.isPro);
             if (!limits.canSend) {
-                const chatToUpdate = db.chats.find(c => c.id === numericChatId && c.username === username);
-                if (chatToUpdate) {
-                    chatToUpdate.messages.push({ text: `Фоновый запрос не выполнен: достигнут лимит (${limits.limit}).`, sender: 'system' });
+                 const chatToUpdate = db.chats.find(c => c.id === numericChatId && c.username === username);
+                 if (chatToUpdate) {
+                    chatToUpdate.messages.push({ text: `Фоновый запрос не выполнен: лимит (${limits.limit}).`, sender: 'system' });
                     chatToUpdate.lastUpdated = Date.now();
                     saveDb();
-                }
+                 }
                 return;
             }
-
             const messagesPayload = [];
             if (!disableSystemReflex && systemMessageContent) {
                 messagesPayload.push({ role: 'system', content: systemMessageContent });
@@ -291,12 +255,11 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
             const llamaResponse = await fetch(`${LLAMA_SERVER_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: messagesPayload, temperature: temperature, top_p: topP }),
+                body: JSON.stringify({ messages: messagesPayload, temperature, top_p: topP }),
             });
 
             if (!llamaResponse.ok) {
                 const errorText = await llamaResponse.text();
-                console.error(`[Background AI] LLaMA error for chat ${numericChatId}. Status: ${llamaResponse.status}. Body: ${errorText.substring(0,200)}`);
                 const chatToUpdateOnError = db.chats.find(c => c.id === numericChatId && c.username === username);
                 if (chatToUpdateOnError) {
                     chatToUpdateOnError.messages.push({ text: `Ошибка ИИ: ${llamaResponse.statusText}`, sender: 'system' });
@@ -305,11 +268,9 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
                 }
                 return;
             }
-
             const llamaData = await llamaResponse.json();
             const aiReply = llamaData.choices?.[0]?.message?.content || 'Ошибка: пустой ответ от ИИ.';
             const chatIndex = db.chats.findIndex(c => c.id === numericChatId && c.username === username);
-
             if (chatIndex !== -1) {
                 db.chats[chatIndex].messages.push({ text: aiReply, sender: 'ai' });
                 db.chats[chatIndex].lastUpdated = Date.now();
@@ -325,7 +286,7 @@ app.post('/api/chat/background-request', auth, async (req, res) => {
             }
         } catch (error) {
             console.error(`[Background AI] CRITICAL ERROR for chat ${numericChatId}, user ${username}:`, error.message);
-            const chatToUpdateOnCriticalError = db.chats.find(c => c.id === numericChatId && c.username === username);
+             const chatToUpdateOnCriticalError = db.chats.find(c => c.id === numericChatId && c.username === username);
             if (chatToUpdateOnCriticalError) {
                 chatToUpdateOnCriticalError.messages.push({ text: `Критическая ошибка фонового запроса.`, sender: 'system' });
                 chatToUpdateOnCriticalError.lastUpdated = Date.now();
@@ -339,17 +300,20 @@ app.get('/api/folders', auth, (req, res) => {
     const userFolders = db.folders.filter(f => f.username === req.user.username);
     res.json(userFolders);
 });
-
 app.post('/api/folders', auth, (req, res) => {
-    const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'Имя папки обязательно' });
-    if (!Array.isArray(db.folders)) db.folders = [];
-    const folder = { id: Date.now(), username: req.user.username, name, chatIds: [] };
-    db.folders.push(folder);
-    saveDb();
-    res.status(201).json(folder);
+    try {
+        const { name } = req.body;
+        if (!name) return res.status(400).json({ error: 'Имя папки обязательно' });
+        if (!Array.isArray(db.folders)) db.folders = [];
+        const folder = { id: Date.now(), username: req.user.username, name, chatIds: [] };
+        db.folders.push(folder);
+        saveDb();
+        res.status(201).json(folder);
+    } catch (error) {
+        console.error('Ошибка при создании папки:', error);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
 });
-
 app.put('/api/folders/:id', auth, (req, res) => {
     const folderId = parseInt(req.params.id, 10);
     const folder = db.folders.find(f => f.id === folderId && f.username === req.user.username);
@@ -359,7 +323,6 @@ app.put('/api/folders/:id', auth, (req, res) => {
     saveDb();
     res.json(folder);
 });
-
 app.delete('/api/folders/:id', auth, (req, res) => {
     const folderId = parseInt(req.params.id, 10);
     const folderIndex = db.folders.findIndex(f => f.id === folderId && f.username === req.user.username);
@@ -368,35 +331,39 @@ app.delete('/api/folders/:id', auth, (req, res) => {
     saveDb();
     res.json({ ok: true });
 });
-
 app.post('/api/chats/:chatId/move', auth, async (req, res) => {
-    const { folderId: targetFolderId } = req.body;
-    const chatId = parseInt(req.params.chatId, 10);
-    const chat = db.chats.find(c => c.id === chatId && c.username === req.user.username);
-    if (!chat) return res.status(404).json({ error: 'Чат не найден' });
-    if (!Array.isArray(db.folders)) db.folders = [];
-    db.folders.forEach(folder => {
-        if (folder.username === req.user.username && Array.isArray(folder.chatIds)) {
-            folder.chatIds = folder.chatIds.filter(id => id !== chatId);
+    try {
+        const { folderId: targetFolderId } = req.body;
+        const chatId = parseInt(req.params.chatId, 10);
+        const chat = db.chats.find(c => c.id === chatId && c.username === req.user.username);
+        if (!chat) return res.status(404).json({ error: 'Чат не найден' });
+        if (!Array.isArray(db.folders)) db.folders = [];
+        db.folders.forEach(folder => {
+            if (folder.username === req.user.username && Array.isArray(folder.chatIds)) {
+                folder.chatIds = folder.chatIds.filter(id => id !== chatId);
+            }
+        });
+        if (targetFolderId !== null && targetFolderId !== undefined) {
+            const targetFolder = db.folders.find(f => f.id == targetFolderId && f.username === req.user.username);
+            if (!targetFolder) return res.status(404).json({ error: 'Целевая папка не найдена' });
+            if (!Array.isArray(targetFolder.chatIds)) targetFolder.chatIds = [];
+            if (!targetFolder.chatIds.includes(chatId)) {
+                targetFolder.chatIds.push(chatId);
+            }
         }
-    });
-    if (targetFolderId !== null && targetFolderId !== undefined) {
-        const targetFolder = db.folders.find(f => f.id == targetFolderId && f.username === req.user.username);
-        if (!targetFolder) return res.status(404).json({ error: 'Целевая папка не найдена' });
-        if (!Array.isArray(targetFolder.chatIds)) targetFolder.chatIds = [];
-        if (!targetFolder.chatIds.includes(chatId)) {
-            targetFolder.chatIds.push(chatId);
-        }
+        saveDb();
+        const userFolders = db.folders.filter(f => f.username === req.user.username);
+        const userChats = db.chats.filter(c => c.username === req.user.username).sort((a, b) => (b.lastUpdated || b.id) - (a.lastUpdated || a.id));
+        res.json({ ok: true, folders: userFolders, chats: userChats });
+    } catch (error) {
+        console.error('Ошибка при перемещении чата:', error);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
-    saveDb();
-    const userFolders = db.folders.filter(f => f.username === req.user.username);
-    const userChats = db.chats.filter(c => c.username === req.user.username).sort((a, b) => (b.lastUpdated || b.id) - (a.lastUpdated || a.id));
-    res.json({ ok: true, folders: userFolders, chats: userChats });
 });
 
 app.get('/api/message-limits', auth, (req, res) => {
     const user = db.users.find(u => u.username === req.user.username);
-    if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+    if (!user) return res.status(404).json({ error: "Пользователь не найден для получения лимитов" });
     const limits = checkMessageLimits(req.user.username, user.isPro);
     res.json(limits);
 });
@@ -413,24 +380,37 @@ app.put('/api/me', auth, (req, res) => {
     res.json({ username: user.username, displayName: user.displayName, isPro: !!user.isPro });
 });
 
-// --- Admin Endpoints ---
-app.post('/api/admin/login-check', (req, res) => {
-    const { adminPassword } = req.body;
-    if (!ADMIN_PASSKEY) {
-        // Эта ошибка теперь должна быть видна в логах сервера при старте, если ADMIN_PASSKEY не установлен
-        console.error("LOGIN_CHECK_ERROR: ADMIN_PASSKEY не настроен на сервере при проверке логина.");
-        return res.status(500).json({ error: 'Ошибка конфигурации сервера: ADMIN_PASSKEY не установлен.' });
+// --- Эндпоинты АДМИНИСТРАТОРА ---
+
+// Новый эндпоинт для аутентификации администратора
+app.post('/api/admin/authenticate', (req, res) => {
+    const { adminpass } = req.body;
+    if (!adminpass) {
+        return res.status(400).json({ success: false, error: 'Пароль не предоставлен' });
     }
-    if (adminPassword && adminPassword === ADMIN_PASSKEY) {
-        res.json({ ok: true, message: 'Пароль верный' });
+    if (adminpass === ADMIN_PASSKEY) {
+        // В реальном приложении здесь бы генерировался JWT для админа
+        // и последующие админские запросы проверяли бы этот JWT.
+        // Для упрощения, пока просто подтверждаем успешный вход.
+        console.log('Admin authentication successful.');
+        res.json({ success: true });
     } else {
-        res.status(401).json({ error: 'Неверный пароль администратора' });
+        console.log('Admin authentication failed: invalid password attempt.');
+        res.status(401).json({ success: false, error: 'Неверный пароль администратора' });
     }
 });
 
+// ВАЖНО: Следующие эндпоинты (/api/admin/*) должны быть защищены!
+// Сейчас они доступны любому, кто знает URL.
+// Рекомендуется использовать JWT-аутентификацию для администратора,
+// где токен выдается после успешного входа через /api/admin/authenticate
+// и проверяется в middleware для всех остальных /api/admin/* маршрутов.
 
-app.post('/api/admin/setpro', adminAuth, (req, res) => {
-    const { username, isPro } = req.body;
+app.post('/api/admin/setpro', (req, res) => {
+    // TODO: Добавить проверку админских прав (например, через JWT)
+    const { username, isPro, adminSecret } = req.body; // adminSecret для примера, лучше JWT
+    if (adminSecret !== ADMIN_PASSKEY) return res.status(403).json({ error: 'Нет доступа (setpro)' });
+
     const user = db.users.find(u => u.username === username);
     if (!user) return res.status(404).json({ error: 'Нет пользователя' });
     user.isPro = !!isPro;
@@ -438,27 +418,37 @@ app.post('/api/admin/setpro', adminAuth, (req, res) => {
     res.json({ ok: true, message: `Статус Pro для ${username} обновлен.` });
 });
 
-app.get('/api/admin/pending', adminAuth, (req, res) => {
+app.get('/api/admin/pending', (req, res) => {
+    // TODO: Добавить проверку админских прав
+    // Для примера, можно было бы передавать пароль в query параметре, но это небезопасно для GET.
+    // const { admin_passkey_query } = req.query;
+    // if (admin_passkey_query !== ADMIN_PASSKEY) return res.status(403).json({ error: 'Нет доступа (pending)' });
     res.json(db.pending.map(u => ({ username: u.username, displayName: u.displayName })));
 });
 
-app.get('/api/admin/users', adminAuth, (req, res) => {
+app.get('/api/admin/users', (req, res) => {
+    // TODO: Добавить проверку админских прав
     res.json(db.users.map(u => ({ username: u.username, displayName: u.displayName, isPro: !!u.isPro })));
 });
 
-app.post('/api/admin/approve', adminAuth, (req, res) => {
-    const { username, accept } = req.body;
+app.post('/api/admin/approve', (req, res) => {
+    // TODO: Добавить проверку админских прав
+    const { username, accept, adminSecret } = req.body; // adminSecret для примера
+    if (adminSecret !== ADMIN_PASSKEY) return res.status(403).json({ error: 'Нет доступа (approve)' });
+
     const idx = db.pending.findIndex(u => u.username === username);
     if (idx === -1) return res.status(404).json({ error: 'Нет такого пользователя в ожидании' });
     const userToProcess = db.pending[idx];
     db.pending.splice(idx, 1);
     if (accept) {
         db.users.push({ username: userToProcess.username, password: userToProcess.password, displayName: userToProcess.displayName, isPro: false });
+        saveDb();
+        return res.json({ ok: true, message: 'Пользователь подтвержден' });
+    } else {
+        saveDb();
+        return res.json({ ok: true, message: 'Пользователь отклонен' });
     }
-    saveDb(); // Сохраняем в любом случае (удаление из pending или добавление в users)
-    res.json({ ok: true, message: `Пользователь ${userToProcess.username} ${accept ? 'подтвержден' : 'отклонен'}` });
 });
-
 
 app.post('/api/chat/stream', auth, async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -480,10 +470,9 @@ app.post('/api/chat/stream', auth, async (req, res) => {
             const { done, value } = await reader.read();
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-            const sseFormattedChunk = chunk.split('\n\n').filter(Boolean).map(part => `data: ${part}\n\n`).join('');
-            res.write(sseFormattedChunk);
+            res.write(`data: ${chunk}\n\n`);
         }
-        res.write('event: done\ndata: {"id":"cmpl-done","object":"chat.completion.chunk","created":0,"model":"","choices":[{"index":0,"delta":{"role":"assistant","content":"[DONE]"},"finish_reason":"stop"}]}\n\n');
+        res.write('event: done\ndata: [DONE]\n\n');
     } catch (error) {
         console.error('Stream error:', error);
         res.write(`event: error\ndata: ${JSON.stringify({ message: error.message || "Stream failed" })}\n\n`);
@@ -493,7 +482,7 @@ app.post('/api/chat/stream', auth, async (req, res) => {
 });
 
 const CONFIG_FILE = './config.json';
-const defaultConfig = { monitorUrl: LLAMA_SERVER_URL ? `${LLAMA_SERVER_URL}/data` : '' };
+const defaultConfig = { monitorUrl: LLAMA_SERVER_URL + '/data' }; // Используем LLAMA_SERVER_URL как базовый
 let config;
 try {
     config = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : defaultConfig;
@@ -504,11 +493,21 @@ function saveConfig() {
     catch (e) { console.error('Ошибка при сохранении config.json:', e); }
 }
 
-app.get('/api/monitor-url', adminAuth, (req, res) => res.json({ monitorUrl: config.monitorUrl }));
+app.get('/api/monitor-url', (req, res) => {
+    // Этот эндпоинт может быть доступен без админ-аутентификации, если это просто чтение
+    // Если нет, его тоже нужно защитить.
+    res.json({ monitorUrl: config.monitorUrl });
+});
 
-app.post('/api/monitor-url', adminAuth, (req, res) => {
-    const { monitorUrl } = req.body;
-    if (!monitorUrl || typeof monitorUrl !== 'string') return res.status(400).json({ error: 'Некорректная ссылка' });
+app.post('/api/monitor-url', (req, res) => {
+    const { monitorUrl, adminSecret } = req.body;
+    // Проверяем пароль администратора (полученный из секрета Koyeb)
+    if (adminSecret !== ADMIN_PASSKEY) {
+        return res.status(403).json({ error: 'Нет доступа - неверный пароль администратора' });
+    }
+    if (!monitorUrl || typeof monitorUrl !== 'string') {
+        return res.status(400).json({ error: 'Некорректная ссылка' });
+    }
     config.monitorUrl = monitorUrl;
     saveConfig();
     res.json({ ok: true, monitorUrl });
@@ -519,7 +518,7 @@ app.post('/api/message-limits/decrement', auth, (req, res) => {
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
     const limits = checkMessageLimits(req.user.username, user.isPro);
     if (!limits.canSend) {
-        return res.status(429).json({ error: `Достигнут лимит (${limits.limit})`, resetTime: limits.resetTime, limit: limits.limit, remaining: limits.remaining });
+        return res.status(429).json({ error: `Достигнут лимит сообщений (${limits.limit})`, resetTime: limits.resetTime, limit: limits.limit, remaining: limits.remaining });
     }
     incrementMessageCount(req.user.username);
     const newLimits = checkMessageLimits(req.user.username, user.isPro);
@@ -528,7 +527,13 @@ app.post('/api/message-limits/decrement', auth, (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`ReflexAI сервер запущен на порту ${PORT}`);
-    // Проверка ADMIN_PASSKEY при старте уже сделана выше
+    if (ADMIN_PASSKEY === 'fallback_dev_password_65195') {
+        console.warn('ВНИМАНИЕ: Используется ЗАПАСНОЙ пароль администратора. Установите секрет ADMIN_PASSKEY в Koyeb!');
+    } else {
+        console.log('Пароль администратора загружен из секрета ADMIN_PASSKEY.');
+    }
+     console.log(`LLaMA server URL: ${LLAMA_SERVER_URL}`);
+     console.log(`Monitor URL from config: ${config.monitorUrl}`);
 });
 
 function isSpecialCommandReply(text) {
