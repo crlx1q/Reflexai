@@ -5,182 +5,79 @@
     <title>ReflexAI Admin Console</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #1e1e1e; 
-            color: #e0e0e0; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            min-height: 100vh; 
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .admin-box { 
-            background: #2d2d2d; 
-            border-radius: 12px; 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4); 
-            padding: 30px 35px; 
-            width: 100%;
-            max-width: 500px; 
-            box-sizing: border-box;
-        }
-        .admin-box h2 { 
-            margin-top: 0;
-            margin-bottom: 25px; 
-            color: #61dafb;
-            text-align: center;
-            font-size: 1.8em;
-        }
-        .admin-box form { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
-        }
-        .admin-box input[type="password"],
-        .admin-box input[type="text"] { 
-            padding: 12px 15px; 
-            border-radius: 6px; 
-            border: 1px solid #4a4a4a; 
-            background: #252525; 
-            color: #e0e0e0; 
-            font-size: 1em;
-            outline: none;
-        }
-        .admin-box input[type="password"]:focus,
-        .admin-box input[type="text"]:focus {
-            border-color: #61dafb;
-            box-shadow: 0 0 0 2px rgba(97, 218, 251, 0.3);
-        }
-        .admin-box button { 
-            padding: 12px 15px; 
-            background: #61dafb; /* Яркий акцентный цвет */
-            color: #1e1e1e; /* Темный текст для контраста */
-            border: none; 
-            border-radius: 6px; 
-            font-weight: 600; 
-            cursor: pointer; 
-            font-size: 1em;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-        }
-        .admin-box button:hover {
-            background: #52c5e7;
-        }
-        .admin-box button:active {
-            transform: translateY(1px);
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #121212; color: #e0e0e0; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .admin-box { background: #1e1e1e; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); padding: 30px 35px; width: 100%; max-width: 480px; border: 1px solid #333; }
+        .admin-box h2 { margin-top: 0; margin-bottom: 25px; color: #E58320; text-align: center; font-size: 1.8em; }
+        .admin-box form { display: flex; flex-direction: column; gap: 15px; }
+        .admin-box input[type="password"], .admin-box input[type="text"] { padding: 12px 15px; border-radius: 8px; border: 1px solid #444; background: #282828; color: #e0e0e0; font-size: 1em; transition: border-color 0.3s, box-shadow 0.3s; }
+        .admin-box input[type="password"]:focus, .admin-box input[type="text"]:focus { border-color: #E58320; box-shadow: 0 0 0 3px rgba(229, 131, 32, 0.3); outline: none; }
+        .admin-box button[type="submit"], .admin-box button { padding: 12px 18px; background: #E58320; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1em; transition: background-color 0.3s; }
+        .admin-box button[type="submit"]:hover, .admin-box button:hover { background: #d47310; }
         .admin-console { margin-top: 25px; }
-        .pending-list, .user-list { 
-            margin: 0; 
-            padding: 0; 
-            list-style: none; 
-        }
-        .pending-list li, .user-list li { 
-            background: #333333; 
-            margin-bottom: 10px; 
-            padding: 15px; 
-            border-radius: 8px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .pending-list .info, .user-list .info { 
-            flex: 1; 
-            min-width: 150px; /* Чтобы текст не сжимался слишком сильно */
-        }
-        .pending-list .info b, .user-list .info b {
-            color: #82e9ff;
-        }
-        .pending-list button, .user-list button, #refreshBtn, #refreshUsersBtn {
-            margin-left: 0; /* Убрали левый отступ, используем gap */
-            padding: 8px 12px;
-            font-size: 0.9em;
-        }
-        .pending-list .accept-btn { background-color: #4CAF50; color: white;}
-        .pending-list .reject-btn { background-color: #f44336; color: white;}
-        .user-list .pro-btn.is-pro { background-color: #ff9800; color: white;} /* Оранжевый для "Снять Pro" */
-        .user-list .pro-btn.not-pro { background-color: #4CAF50; color: white;} /* Зеленый для "Выдать Pro" */
-        
-        #refreshBtn, #refreshUsersBtn {
-            display: block;
-            width: 100%;
-            margin-top: 15px;
-            background-color: #555;
-        }
-         #refreshBtn:hover, #refreshUsersBtn:hover {
-            background-color: #666;
-        }
+        .admin-console h3 { color: #E58320; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 8px; }
+        .list-container { max-height: 200px; overflow-y: auto; background: #282828; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
+        .pending-list, .user-list { margin: 0; padding: 0; list-style: none; }
+        .pending-list li, .user-list li { background: #333; margin-bottom: 10px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.95em; }
+        .pending-list .info, .user-list .info { flex: 1; }
+        .pending-list .info b, .user-list .info b { color: #E58320; }
+        .pending-list button, .user-list button { margin-left: 10px; padding: 6px 10px; font-size: 0.85em; min-width: 80px; }
+        .accept-btn { background-color: #28a745; } .accept-btn:hover { background-color: #218838; }
+        .reject-btn { background-color: #dc3545; } .reject-btn:hover { background-color: #c82333; }
+        .pro-btn.is-pro { background-color: #555; } .pro-btn.is-pro:hover { background-color: #444; }
+        .pro-btn.not-pro { background-color: #007bff; } .pro-btn.not-pro:hover { background-color: #0069d9; }
 
-        .feedback { 
-            color: #ff6b6b; /* Яркий красный для ошибок */
-            min-height: 20px; 
-            font-size: 0.9em; 
-            text-align: center;
-            margin-top: 10px;
-        }
-        hr {
-            border: none;
-            border-top: 1px solid #4a4a4a;
-            margin: 25px 0;
-        }
-        h3 {
-            color: #82e9ff;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #4a4a4a;
-            padding-bottom: 8px;
-        }
-        #monitorUrlForm {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-        #monitorUrlInput {
-            flex: 1;
-        }
+        .feedback { color: #ff6b6b; min-height: 20px; font-size: 0.9em; text-align: center; margin-top: 10px; }
+        hr { border: none; border-top: 1px solid #444; margin: 25px 0; }
+        #monitorUrlForm { display: flex; gap: 10px; align-items: center; }
+        #monitorUrlInput { flex: 1; }
     </style>
 </head>
 <body>
     <div class="admin-box">
         <h2>Админ-консоль ReflexAI</h2>
         <form id="adminLoginForm" autocomplete="off">
-            <input type="password" id="adminPassInput" name="adminpass" placeholder="Пароль администратора" required>
+            <input type="password" id="adminpass" name="adminpass" placeholder="Пароль администратора" required>
             <button type="submit">Войти</button>
         </form>
-        <div class="feedback" id="adminFeedback"></div>
+        <div class="feedback" id="adminLoginFeedback"></div>
 
         <div class="admin-console" id="adminConsole" style="display:none;">
             <h3>Ожидающие регистрации</h3>
-            <ul class="pending-list" id="pendingList"></ul>
-            <button id="refreshBtn">Обновить список ожидающих</button>
+            <div class="list-container">
+                <ul class="pending-list" id="pendingList"></ul>
+            </div>
+            <button id="refreshPendingBtn">Обновить ожидающих</button>
+            <div class="feedback" id="pendingListFeedback"></div>
+
             <hr>
 
             <h3>Настройки мониторинга</h3>
             <form id="monitorUrlForm">
-                <input type="text" id="monitorUrlInput" placeholder="URL для /data эндпоинта монитора">
+                <input type="text" id="monitorUrlInput" placeholder="URL для мониторинга (напр., https://....ngrok-free.app/data)">
                 <button type="submit">Сохранить URL</button>
             </form>
             <div class="feedback" id="monitorUrlFeedback"></div>
+
             <hr>
 
-            <h3>Пользователи (PRO статус)</h3>
-            <ul class="user-list" id="userList"></ul>
-            <button id="refreshUsersBtn">Обновить список пользователей</button>
+            <h3>Пользователи (выдача Pro)</h3>
+             <div class="list-container">
+                <ul class="user-list" id="userList"></ul>
+            </div>
+            <button id="refreshUsersBtn">Обновить пользователей</button>
             <div class="feedback" id="userListFeedback"></div>
         </div>
     </div>
 
     <script>
-        const loginForm = document.getElementById('adminLoginForm');
-        const adminPassInput = document.getElementById('adminPassInput');
-        const feedback = document.getElementById('adminFeedback');
+        const adminLoginForm = document.getElementById('adminLoginForm');
+        const adminLoginFeedback = document.getElementById('adminLoginFeedback');
         const adminConsole = document.getElementById('adminConsole');
-        
+
         const pendingList = document.getElementById('pendingList');
-        const refreshBtn = document.getElementById('refreshBtn');
-        
+        const refreshPendingBtn = document.getElementById('refreshPendingBtn');
+        const pendingListFeedback = document.getElementById('pendingListFeedback');
+
         const monitorUrlForm = document.getElementById('monitorUrlForm');
         const monitorUrlInput = document.getElementById('monitorUrlInput');
         const monitorUrlFeedback = document.getElementById('monitorUrlFeedback');
@@ -189,137 +86,134 @@
         const refreshUsersBtn = document.getElementById('refreshUsersBtn');
         const userListFeedback = document.getElementById('userListFeedback');
 
-        let currentAdminPassword = null; // Будет хранить введенный пароль для последующих запросов
+        let currentAdminPassword = null; // Будет хранить пароль после успешного входа
 
-        loginForm.onsubmit = async (e) => {
+        adminLoginForm.onsubmit = async (e) => {
             e.preventDefault();
-            const pass = adminPassInput.value;
-            feedback.textContent = 'Проверка...';
+            const passwordAttempt = document.getElementById('adminpass').value;
+            adminLoginFeedback.textContent = 'Проверка...';
 
             try {
-                // Отправляем пароль на сервер для проверки
-                const response = await fetch('/api/admin/login-check', {
+                const response = await fetch('/api/admin/authenticate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ adminPassword: pass })
+                    body: JSON.stringify({ adminpass: passwordAttempt })
                 });
+                const result = await response.json();
 
-                if (response.ok) {
-                    currentAdminPassword = pass; // Сохраняем пароль для будущих запросов
-                    loginForm.style.display = 'none';
-                    feedback.textContent = '';
+                if (response.ok && result.success) {
+                    currentAdminPassword = passwordAttempt; // Сохраняем пароль для других запросов
+                    adminLoginForm.style.display = 'none';
+                    adminLoginFeedback.textContent = '';
                     adminConsole.style.display = 'block';
                     afterAdminLogin();
                 } else {
-                    const errorData = await response.json().catch(() => ({ error: 'Неверный пароль или ошибка сервера' }));
-                    feedback.textContent = errorData.error || 'Неверный пароль';
+                    adminLoginFeedback.textContent = result.error || 'Неверный пароль или ошибка сервера.';
                     currentAdminPassword = null;
                 }
             } catch (error) {
-                console.error("Ошибка входа:", error);
-                feedback.textContent = 'Ошибка сети при входе.';
+                console.error("Admin login error:", error);
+                adminLoginFeedback.textContent = 'Ошибка сети при попытке входа.';
                 currentAdminPassword = null;
             }
         };
 
-        // Общая функция для выполнения админских запросов
-        async function fetchAdminAPI(endpoint, method = 'GET', body = null) {
-            if (!currentAdminPassword) {
-                throw new Error('Пароль администратора не установлен. Пожалуйста, войдите снова.');
-            }
-            const headers = {
-                'Content-Type': 'application/json',
-                // Вместо X-Admin-Secret в заголовке, будем передавать его в теле,
-                // так как наш adminAuth middleware на сервере проверяет и тело.
-                // Если бы middleware проверял только заголовок, то:
-                // 'X-Admin-Secret': currentAdminPassword 
-            };
-            const options = { method, headers };
-            if (body) {
-                // Добавляем adminSecret в тело каждого запроса, если он есть
-                options.body = JSON.stringify({ ...body, adminSecret: currentAdminPassword });
-            } else if (method !== 'GET') {
-                 options.body = JSON.stringify({ adminSecret: currentAdminPassword });
-            }
-            // Для GET запросов adminSecret не нужен в теле, он будет проверен если бы был в заголовке.
-            // Но наш adminAuth проверяет и query/body, так что для GET он не нужен, если не передаем тело.
-            // Однако, для единообразия и чтобы adminAuth точно сработал, можно добавить его как query параметр,
-            // но это менее безопасно. Лучше для GET эндпоинтов, если они требуют adminSecret,
-            // чтобы сервер ожидал его в заголовке X-Admin-Secret.
-            // В нашем случае, GET эндпоинты (/api/admin/pending, /api/admin/users, /api/monitor-url)
-            // защищены adminAuth, который проверяет req.body.adminSecret.
-            // Это значит, что для GET запросов без тела, adminAuth не сработает как ожидается, если он ищет adminSecret в теле.
-            // ИСПРАВЛЕНИЕ: adminAuth на сервере должен также проверять заголовки.
-            // Пока что, для GET, мы не будем слать тело, и будем полагаться на то, что
-            // серверный adminAuth настроен на проверку заголовков или что для GET он не нужен.
-            // Обновленный server.js теперь проверяет X-Admin-Secret в заголовке.
-            // Поэтому добавим его для всех типов запросов.
-            headers['X-Admin-Secret'] = currentAdminPassword;
-
-
-            const response = await fetch(endpoint, options);
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `Ошибка сервера: ${response.status}` }));
-                throw new Error(errorData.error || `Ошибка ${response.status}`);
-            }
-            // Для DELETE запросов или других, которые могут не возвращать JSON
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") !== -1) {
-                return response.json();
-            } else {
-                return response.text(); // или просто { ok: true } если текст не важен
-            }
+        function afterAdminLogin() {
+            loadPending();
+            loadMonitorUrl();
+            loadUsers();
         }
 
+        async function fetchData(url, feedbackElement, listElement, processItemFn, noDataMessage, adminActionPassword = null) {
+            if (!currentAdminPassword && adminActionPassword === null) { // Проверка для общих загрузок данных
+                 feedbackElement.textContent = 'Требуется вход администратора для этого действия.';
+                 listElement.innerHTML = `<li>${feedbackElement.textContent}</li>`;
+                 return;
+            }
 
-        async function loadPending() {
-            pendingList.innerHTML = '<li>Загрузка...</li>';
+            listElement.innerHTML = '<li>Загрузка...</li>';
+            feedbackElement.textContent = '';
             try {
-                const data = await fetchAdminAPI('/api/admin/pending');
-                pendingList.innerHTML = '';
+                // Для действий, требующих пароля (setpro, approve), он будет в adminActionPassword
+                // Для GET запросов (pending, users) пароль не нужен в URL, сервер должен быть настроен на проверку сессии/JWT админа
+                // В текущей упрощенной реализации, GET эндпоинты не защищены на сервере, что является уязвимостью.
+                const requestOptions = { method: 'GET' };
+                // В реальном приложении, GET запросы к админским эндпоинтам также должны быть защищены (например, JWT в заголовке)
+                // Сейчас /api/admin/pending и /api/admin/users не защищены на сервере.
+
+                const resp = await fetch(url, requestOptions);
+                if (!resp.ok) {
+                    const errorData = await resp.json().catch(() => ({ error: `Ошибка сервера: ${resp.status}` }));
+                    throw new Error(errorData.error || `Ошибка доступа: ${resp.status}`);
+                }
+                const data = await resp.json();
+                listElement.innerHTML = '';
                 if (!data.length) {
-                    pendingList.innerHTML = '<li>Нет ожидающих регистраций</li>';
+                    listElement.innerHTML = `<li>${noDataMessage}</li>`;
                     return;
                 }
-                for (const user of data) {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName})</span>
-                        <div>
-                            <button class="accept-btn">Принять</button>
-                            <button class="reject-btn">Отклонить</button>
-                        </div>`;
-                    li.querySelector('.accept-btn').onclick = () => handleUserAction(user.username, true);
-                    li.querySelector('.reject-btn').onclick = () => handleUserAction(user.username, false);
-                    pendingList.appendChild(li);
-                }
+                data.forEach(item => listElement.appendChild(processItemFn(item)));
             } catch (e) {
-                pendingList.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
-                console.error("Ошибка загрузки pending:", e);
+                console.error(`Error loading ${url}:`, e);
+                listElement.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
+                feedbackElement.textContent = `Ошибка загрузки: ${e.message}`;
             }
         }
 
-        async function handleUserAction(username, accept) {
-            feedback.textContent = 'Обработка...';
+
+        function loadPending() {
+            fetchData('/api/admin/pending', pendingListFeedback, pendingList, createUserApprovalElement, 'Нет ожидающих регистраций');
+        }
+
+        function createUserApprovalElement(user) {
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'})</span>
+                            <div>
+                                <button class="accept-btn">Принять</button>
+                                <button class="reject-btn">Отклонить</button>
+                            </div>`;
+            li.querySelector('.accept-btn').onclick = () => handleUserApproval(user.username, true);
+            li.querySelector('.reject-btn').onclick = () => handleUserApproval(user.username, false);
+            return li;
+        }
+
+        async function handleUserApproval(username, accept) {
+            pendingListFeedback.textContent = 'Обработка...';
+            if (!currentAdminPassword) {
+                 pendingListFeedback.textContent = 'Ошибка: пароль администратора не установлен. Войдите снова.';
+                 return;
+            }
             try {
-                await fetchAdminAPI('/api/admin/approve', 'POST', { username, accept });
-                feedback.textContent = `Пользователь ${username} ${accept ? 'принят' : 'отклонен'}.`;
+                const resp = await fetch('/api/admin/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, accept, adminSecret: currentAdminPassword }) // Отправляем пароль
+                });
+                const result = await resp.json();
+                if (!resp.ok || !result.ok) throw new Error(result.message || 'Ошибка выполнения действия');
+                pendingListFeedback.textContent = result.message || (accept ? 'Пользователь принят.' : 'Пользователь отклонен.');
                 loadPending(); // Обновить список
             } catch (e) {
-                feedback.textContent = `Ошибка: ${e.message}`;
-                console.error("Ошибка действия над пользователем:", e);
+                console.error("Approval error:", e);
+                pendingListFeedback.textContent = `Ошибка: ${e.message}`;
             }
         }
 
-        refreshBtn.onclick = loadPending;
+        refreshPendingBtn.onclick = loadPending;
 
         async function loadMonitorUrl() {
             monitorUrlFeedback.textContent = '';
             try {
-                const data = await fetchAdminAPI('/api/monitor-url');
-                monitorUrlInput.value = data.monitorUrl || '';
+                const resp = await fetch('/api/monitor-url'); // Этот GET эндпоинт не требует пароля в текущей реализации
+                if (resp.ok) {
+                    const data = await resp.json();
+                    monitorUrlInput.value = data.monitorUrl || '';
+                } else {
+                    monitorUrlFeedback.textContent = 'Не удалось загрузить URL мониторинга.';
+                }
             } catch (e) {
-                monitorUrlFeedback.textContent = `Ошибка загрузки URL: ${e.message}`;
-                console.error("Ошибка загрузки monitor URL:", e);
+                console.error("Error loading monitor URL:", e);
+                monitorUrlFeedback.textContent = 'Ошибка сети при загрузке URL мониторинга.';
             }
         }
 
@@ -327,67 +221,74 @@
             e.preventDefault();
             monitorUrlFeedback.textContent = 'Сохранение...';
             const url = monitorUrlInput.value.trim();
-            if (!url) {
-                monitorUrlFeedback.textContent = 'Введите ссылку';
+
+            if (!currentAdminPassword) {
+                monitorUrlFeedback.textContent = 'Ошибка: пароль администратора не установлен. Войдите снова.';
                 return;
             }
+            if (!url) {
+                monitorUrlFeedback.textContent = 'Введите URL';
+                return;
+            }
+
             try {
-                await fetchAdminAPI('/api/monitor-url', 'POST', { monitorUrl: url });
-                monitorUrlFeedback.textContent = 'Ссылка сохранена!';
-            } catch (e) {
-                monitorUrlFeedback.textContent = `Ошибка сохранения: ${e.message}`;
-                console.error("Ошибка сохранения monitor URL:", e);
+                const resp = await fetch('/api/monitor-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ monitorUrl: url, adminSecret: currentAdminPassword })
+                });
+                const result = await resp.json();
+                if (!resp.ok || !result.ok) {
+                     throw new Error(result.error || 'Ошибка сохранения URL');
+                }
+                monitorUrlFeedback.textContent = 'URL мониторинга сохранен!';
+            } catch (err) {
+                console.error("Monitor URL save error:", err);
+                monitorUrlFeedback.textContent = `Ошибка: ${err.message}`;
             }
         };
 
-        async function loadUsers() {
-            userList.innerHTML = '<li>Загрузка...</li>';
-            userListFeedback.textContent = '';
-            try {
-                const data = await fetchAdminAPI('/api/admin/users');
-                userList.innerHTML = '';
-                if (!data.length) {
-                    userList.innerHTML = '<li>Нет пользователей</li>';
-                    return;
-                }
-                for (const user of data) {
-                    const li = document.createElement('li');
-                    const proButtonClass = user.isPro ? 'is-pro' : 'not-pro';
-                    li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName}) 
-                        <span style="color:${user.isPro ? '#76ff03' : '#ff6b6b'};font-weight:600;margin-left:8px;">${user.isPro ? 'PRO' : 'FREE'}</span>
-                    </span>
-                    <button class="pro-btn ${proButtonClass}">
-                        ${user.isPro ? 'Снять Pro' : 'Выдать Pro'}
-                    </button>`;
-                    li.querySelector('.pro-btn').onclick = () => handleProAction(user.username, !user.isPro);
-                    userList.appendChild(li);
-                }
-            } catch (e) {
-                userList.innerHTML = `<li>Ошибка загрузки: ${e.message}</li>`;
-                userListFeedback.textContent = `Ошибка загрузки пользователей: ${e.message}`;
-                console.error("Ошибка загрузки пользователей:", e);
-            }
+        function loadUsers() {
+            fetchData('/api/admin/users', userListFeedback, userList, createUserProElement, 'Нет зарегистрированных пользователей');
+        }
+
+        function createUserProElement(user) {
+            const li = document.createElement('li');
+            const proStatus = user.isPro ? 'PRO' : 'FREE';
+            const proButtonText = user.isPro ? 'Снять Pro' : 'Выдать Pro';
+            const proButtonClass = user.isPro ? 'is-pro' : 'not-pro';
+            li.innerHTML = `<span class="info"><b>${user.username}</b> (${user.displayName || 'N/A'}) 
+                                <span style="color:${user.isPro ? '#4CAF50' : '#F44336'};font-weight:bold;margin-left:10px;">${proStatus}</span>
+                            </span>
+                            <button class="pro-btn ${proButtonClass}">${proButtonText}</button>`;
+            li.querySelector('.pro-btn').onclick = () => handleProAction(user.username, !user.isPro);
+            return li;
         }
 
         async function handleProAction(username, setPro) {
-            userListFeedback.textContent = 'Обновление статуса Pro...';
+            userListFeedback.textContent = 'Обработка...';
+             if (!currentAdminPassword) {
+                 userListFeedback.textContent = 'Ошибка: пароль администратора не установлен. Войдите снова.';
+                 return;
+            }
             try {
-                await fetchAdminAPI('/api/admin/setpro', 'POST', { username, isPro: setPro });
-                userListFeedback.textContent = `Статус Pro для ${username} ${setPro ? 'выдан' : 'снят'}!`;
+                const resp = await fetch('/api/admin/setpro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, isPro: setPro, adminSecret: currentAdminPassword }) // Отправляем пароль
+                });
+                const result = await resp.json();
+                if (!resp.ok || !result.ok) throw new Error(result.message || 'Ошибка изменения статуса Pro');
+                userListFeedback.textContent = result.message || (setPro ? `Pro статус выдан ${username}.` : `Pro статус снят с ${username}.`);
                 loadUsers(); // Обновить список
             } catch (e) {
-                userListFeedback.textContent = `Ошибка обновления Pro: ${e.message}`;
-                console.error("Ошибка обновления Pro статуса:", e);
+                console.error("Pro action error:", e);
+                userListFeedback.textContent = `Ошибка: ${e.message}`;
             }
         }
 
         refreshUsersBtn.onclick = loadUsers;
 
-        function afterAdminLogin() {
-            loadPending();
-            loadMonitorUrl();
-            loadUsers();
-        }
     </script>
 </body>
 </html>
