@@ -443,8 +443,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!currentChatId) return;
     
         let chat = await getChatById(currentChatId);
-        if (!chat) { // Если чат не найден (например, tempNewChat еще не создан как объект)
-            if (String(currentChatId).startsWith('temp-')) { // Это должен быть tempNewChat
+        if (!chat) {
+            if (String(currentChatId).startsWith('temp-')) {
                  console.warn("Tried to save message to a temp chat that wasn't fully initialized. This shouldn't happen.");
                  // Попытка восстановить tempNewChat, если он был сброшен
                  if (!tempNewChat || tempNewChat.id !== currentChatId) {
@@ -459,16 +459,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
         chat.messages = chat.messages || [];
         chat.messages.push({ text, sender });
-        chat.lastUpdated = Date.now(); // Обновляем время последнего сообщения
-    
-        // Если это временный чат и это первое сообщение пользователя, используем его как заголовок
+        chat.lastUpdated = Date.now();
         if (String(chat.id).startsWith('temp-') && sender === 'user' && chat.messages.length === 1) {
-            chat.title = text.substring(0, 50); // Ограничиваем длину заголовка
+            chat.title = text.substring(0, 50);
         }
-    
-        // Сохраняем чат на сервере (это обработает и новые, и существующие чаты)
         const savedChat = await saveChatToServer({
-            id: chat.id, // Важно передавать ID
+            id: chat.id,
             title: chat.title,
             messages: chat.messages,
             username: chat.username,
@@ -476,15 +472,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (savedChat) {
-            // Если это был tempNewChat, он теперь сохранен, и currentChatId мог обновиться
-            if (String(chat.id).startsWith('temp-')) {
-                // currentChatId уже должен быть обновлен внутри saveChatToServer
-                // tempNewChat должен быть сброшен в null там же
-            }
             // Обновляем allChats и UI
-            await syncChatsFromServer(); // Чтобы получить актуальный список с сервера
+            await syncChatsFromServer();
         }
         updateChatHeaderTitle();
+        await fetchMessageLimits(); // <-- всегда обновляем лимит после любого сохранения сообщения
     }
 
     if (chatsListUl) {
@@ -1356,6 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // --- Лимит сообщений применяется всегда ---
         if (messageLimits && messageLimits.remaining <= 0) {
             const timeLeft = Math.max(0, messageLimits.resetTime - Date.now());
             const hours = Math.floor(timeLeft / 3600000);
@@ -1437,7 +1430,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // После успешной отправки сообщения (в любом режиме, если это не фоновый)
         // или после принятия в фоновую обработку, обновляем лимиты
-        await fetchMessageLimits(); // Обновляем UI лимитов
+        // await fetchMessageLimits(); // <-- теперь обновление лимита происходит после saveMessageToCurrentChat и addMessageToChat
     }
 
 
@@ -1554,6 +1547,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
+                    // --- Лимит сообщений применяется всегда ---
                     if (messageLimits && messageLimits.remaining <= 0) {
                         const message = currentUser.isPro ? 
                             `Достигнут лимит сообщений (${messageLimits.limit}). Пожалуйста, подождите.` :
@@ -1653,7 +1647,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await saveMessageToCurrentChat(aiReply, 'ai');
                         }
                     }
-                    await fetchMessageLimits(); // Обновляем лимиты
+                    // await fetchMessageLimits(); // <-- теперь обновление лимита происходит после saveMessageToCurrentChat и addMessageToChat
                 };
                 textarea.addEventListener('keydown', (ev) => {
                     if (ev.key === 'Enter' && !ev.shiftKey) {
@@ -1672,7 +1666,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const paragraph = document.createElement('p');
             paragraph.textContent = text;
             messageContentDiv.appendChild(paragraph);
-            messageDiv.appendChild(avatarImg); // Аватар слева
+            // messageDiv.appendChild(avatarImg); // УБРАНО: не добавляем аватарку для system
             messageDiv.appendChild(messageContentDiv); // Контент справа
             messageWrapper.appendChild(messageDiv);
         } else { // AI message
@@ -1828,6 +1822,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
                 if (userMsgTextForRegen) {
+                    // --- Лимит сообщений применяется всегда ---
                     if (messageLimits && messageLimits.remaining <= 0) {
                         const message = currentUser.isPro ? 
                             `Достигнут лимит сообщений (${messageLimits.limit}). Пожалуйста, подождите.` :
@@ -1860,7 +1855,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await saveMessageToCurrentChat(aiReply, 'ai');
                         }
                     }
-                    await fetchMessageLimits(); // Обновляем лимиты
+                    // await fetchMessageLimits(); // <-- теперь обновление лимита происходит после saveMessageToCurrentChat и addMessageToChat
                 } else {
                     addMessageToChat("Не найдено предыдущее сообщение пользователя для регенерации.", "system");
                 }
@@ -1892,6 +1887,8 @@ document.addEventListener('DOMContentLoaded', () => {
                  chatHistory.push({ role: sender, content: text });
             }
         }
+        // --- всегда обновляем лимит после любого добавления сообщения ---
+        fetchMessageLimits();
     }
 
     async function decrementMessageLimit() { // Эта функция больше не нужна на клиенте, сервер сам управляет
