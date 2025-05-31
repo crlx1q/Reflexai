@@ -1,0 +1,38 @@
+# Файл для хранения секретов (не должен попадать в Git)
+secrets.toml
+.env
+
+# Файл базы данных
+db.json
+
+# Файл конфигурации (если он содержит специфичные для окружения данные)
+config.json
+
+# Зависимости Node.js
+node_modules/
+
+# Логи
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Файлы окружения IDE
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-workspace
+
+# Файлы операционной системы
+.DS_Store
+Thumbs.db
+
+# Сборки и артефакты сборки (если применимо)
+dist/
+build/
+coverage/
